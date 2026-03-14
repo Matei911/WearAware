@@ -20,6 +20,7 @@ void setup()
       menuReadings.batteryPercent = Sensors::batteryPercentForMenu();
       DisplayManager::init();
       SamplingMenu::run(menuReadings);
+      DisplayManager::renderWaitingForDataScreen(menuReadings);
    }
 
    Sensors::init();

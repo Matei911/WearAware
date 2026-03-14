@@ -20,3 +20,8 @@ void draw(WearAwareDisplay& display,
           SamplingInterval selectedInterval,
           const SensorReadings& readings);
 }  // namespace SamplingMenuScreen
+
+namespace WaitingForDataScreen
+{
+void draw(WearAwareDisplay& display, const SensorReadings& readings);
+}  // namespace WaitingForDataScreen

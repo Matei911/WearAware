@@ -88,6 +88,20 @@ namespace DisplayManager
       advanceRefreshCycle();
    }
 
+   void renderWaitingForDataScreen(const SensorReadings &readings)
+   {
+      display.setPartialWindow(0,
+                               0,
+                               AppConfig::DISPLAY_WIDTH,
+                               AppConfig::DISPLAY_HEIGHT);
+
+      display.firstPage();
+      do
+      {
+         WaitingForDataScreen::draw(display, readings);
+      } while (display.nextPage());
+   }
+
    void renderSamplingMenu(SamplingInterval selectedInterval,
                            bool usePartialRefresh,
                            const SensorReadings &readings)
