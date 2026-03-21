@@ -33,8 +33,6 @@ namespace HomeScreen
 void draw(WearAwareDisplay& display, const SensorReadings& readings)
 {
    display.fillScreen(GxEPD_WHITE);
-   // display.fillRect(0,0,200,200, GxEPD_WHITE);
-   // display.setTextColor(GxEPD_BLACK, GxEPD_WHITE);
    ScreenHeader::draw(display, readings.batteryPercent);
 
    display.setCursor(7, 44);

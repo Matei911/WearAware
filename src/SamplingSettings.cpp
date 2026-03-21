@@ -2,12 +2,14 @@
 
 namespace
 {
-constexpr uint8_t INTERVAL_COUNT = 3;
-constexpr uint64_t SLEEP_DURATIONS_US[INTERVAL_COUNT] = {
+constexpr uint64_t SLEEP_DURATIONS_US[] = {
     300ULL * 1000000ULL,
     60ULL * 1000000ULL,
     30ULL * 1000000ULL,
 };
+
+constexpr uint8_t INTERVAL_COUNT =
+    sizeof(SLEEP_DURATIONS_US) / sizeof(SLEEP_DURATIONS_US[0]);
 
 RTC_DATA_ATTR uint8_t selectedIntervalIndex =
     static_cast<uint8_t>(SamplingInterval::FiveMinutes);

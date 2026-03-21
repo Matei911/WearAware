@@ -1,5 +1,6 @@
 #include <Arduino.h>
 
+#include "BleSettings.h"
 #include "DisplayManager.h"
 #include "PowerManager.h"
 #include "SamplingMenu.h"
@@ -12,6 +13,7 @@ void setup()
    delay(200);
 
    PowerManager::init();
+   BleSettings::init();
    SamplingSettings::init();
 
    if (PowerManager::shouldEnterSamplingMenu())
