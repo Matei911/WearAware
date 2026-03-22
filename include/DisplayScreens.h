@@ -1,7 +1,7 @@
 #pragma once
 
 #include "DisplayTypes.h"
-#include "SamplingSettings.h"
+#include "SamplingMenu.h"
 #include "SensorReadings.h"
 
 namespace ScreenHeader
@@ -16,12 +16,23 @@ void draw(WearAwareDisplay& display, const SensorReadings& readings);
 
 namespace SamplingMenuScreen
 {
-void draw(WearAwareDisplay& display,
-          SamplingInterval selectedInterval,
-          const SensorReadings& readings);
+void drawModeMenu(WearAwareDisplay& display,
+                  SamplingMenu::ModeRow selectedRow,
+                  const SensorReadings& readings);
+void drawDeepSleepMenu(WearAwareDisplay& display,
+                       SamplingMenu::DeepSleepRow selectedRow,
+                       const SensorReadings& readings);
+void drawAppConnectMenu(WearAwareDisplay& display,
+                        SamplingMenu::AppDurationRow selectedRow,
+                        const SensorReadings& readings);
 }  // namespace SamplingMenuScreen
 
 namespace WaitingForDataScreen
 {
 void draw(WearAwareDisplay& display, const SensorReadings& readings);
 }  // namespace WaitingForDataScreen
+
+namespace PhonePromptScreen
+{
+void draw(WearAwareDisplay& display, const SensorReadings& readings);
+}  // namespace PhonePromptScreen

@@ -5,8 +5,8 @@
 enum class SamplingInterval : uint8_t
 {
    FiveMinutes = 0,
-   OneMinute = 1,
-   ThirtySeconds = 2
+   ThreeMinutes = 1,
+   OneMinute = 2
 };
 
 namespace SamplingSettings

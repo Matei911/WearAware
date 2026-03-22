@@ -28,6 +28,7 @@ void setup()
    Sensors::init();
    const SensorReadings readings = Sensors::readAll();
 
+   BleSettings::setEnabled(false);
    DisplayManager::init();
    DisplayManager::renderHomeScreen(readings);
 

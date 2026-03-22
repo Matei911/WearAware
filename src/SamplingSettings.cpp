@@ -4,8 +4,8 @@ namespace
 {
 constexpr uint64_t SLEEP_DURATIONS_US[] = {
     300ULL * 1000000ULL,
+    180ULL * 1000000ULL,
     60ULL * 1000000ULL,
-    30ULL * 1000000ULL,
 };
 
 constexpr uint8_t INTERVAL_COUNT =

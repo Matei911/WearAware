@@ -42,86 +42,143 @@ namespace
 
 namespace DisplayManager
 {
-   void init()
+void init()
+{
+   if (isInitialized)
    {
-      if (isInitialized)
-      {
-         return;
-      }
-
-      pinMode(AppConfig::DISPLAY_POWER_PIN, OUTPUT);
-      digitalWrite(AppConfig::DISPLAY_POWER_PIN, LOW);
-      delay(500);
-
-      pinMode(AppConfig::BMV_CS_PIN, OUTPUT);
-      digitalWrite(AppConfig::BMV_CS_PIN, HIGH);
-      pinMode(AppConfig::EPD_CS, OUTPUT);
-      digitalWrite(AppConfig::EPD_CS, HIGH);
-
-      SPI.begin(AppConfig::EPD_SCK,
-                AppConfig::EPD_MISO,
-                AppConfig::EPD_MOSI);
-
-      display.epd2.selectSPI(
-          SPI, SPISettings(4000000, MSBFIRST, SPI_MODE0));
-
-      display.init(115200, false, 2, false);
-      display.setRotation(AppConfig::DISPLAY_ROTATION);
-      isInitialized = true;
+      return;
    }
 
-   void forceNextFullRefresh()
+   pinMode(AppConfig::DISPLAY_POWER_PIN, OUTPUT);
+   digitalWrite(AppConfig::DISPLAY_POWER_PIN, LOW);
+   delay(500);
+
+   pinMode(AppConfig::BMV_CS_PIN, OUTPUT);
+   digitalWrite(AppConfig::BMV_CS_PIN, HIGH);
+   pinMode(AppConfig::EPD_CS, OUTPUT);
+   digitalWrite(AppConfig::EPD_CS, HIGH);
+
+   SPI.begin(AppConfig::EPD_SCK,
+             AppConfig::EPD_MISO,
+             AppConfig::EPD_MOSI);
+
+   display.epd2.selectSPI(
+       SPI, SPISettings(4000000, MSBFIRST, SPI_MODE0));
+
+   display.init(115200, false, 2, false);
+   display.setRotation(AppConfig::DISPLAY_ROTATION);
+   isInitialized = true;
+}
+
+void forceNextFullRefresh()
+{
+   refreshCycle = 0;
+}
+
+void renderHomeScreen(const SensorReadings& readings)
+{
+   selectRefreshWindow();
+
+   display.firstPage();
+   do
    {
-      refreshCycle = 0;
-   }
+      HomeScreen::draw(display, readings);
+   } while (display.nextPage());
 
-   void renderHomeScreen(const SensorReadings &readings)
+   advanceRefreshCycle();
+}
+
+void renderWaitingForDataScreen(const SensorReadings& readings)
+{
+   display.setPartialWindow(0,
+                            0,
+                            AppConfig::DISPLAY_WIDTH,
+                            AppConfig::DISPLAY_HEIGHT);
+
+   display.firstPage();
+   do
    {
-      selectRefreshWindow();
+      WaitingForDataScreen::draw(display, readings);
+   } while (display.nextPage());
+}
 
-      display.firstPage();
-      do
-      {
-         HomeScreen::draw(display, readings);
-      } while (display.nextPage());
-
-      advanceRefreshCycle();
-   }
-
-   void renderWaitingForDataScreen(const SensorReadings &readings)
+void renderModeMenu(SamplingMenu::ModeRow selectedRow,
+                    bool usePartialRefresh,
+                    const SensorReadings& readings)
+{
+   if (usePartialRefresh)
    {
       display.setPartialWindow(0,
                                0,
                                AppConfig::DISPLAY_WIDTH,
                                AppConfig::DISPLAY_HEIGHT);
-
-      display.firstPage();
-      do
-      {
-         WaitingForDataScreen::draw(display, readings);
-      } while (display.nextPage());
    }
-
-   void renderSamplingMenu(SamplingInterval selectedInterval,
-                           bool usePartialRefresh,
-                           const SensorReadings &readings)
+   else
    {
-      if (usePartialRefresh)
-      {
-         display.setPartialWindow(0,
-                                  0,
-                                  AppConfig::DISPLAY_WIDTH,
-                                  AppConfig::DISPLAY_HEIGHT);
-      }
-      else
-      {
-         display.setFullWindow();
-      }
-
-      display.firstPage();
-      do
-      {
-         SamplingMenuScreen::draw(display, selectedInterval, readings);
-      } while (display.nextPage());
+      display.setFullWindow();
    }
+
+   display.firstPage();
+   do
+   {
+      SamplingMenuScreen::drawModeMenu(display, selectedRow, readings);
+   } while (display.nextPage());
+}
+
+void renderDeepSleepMenu(SamplingMenu::DeepSleepRow selectedRow,
+                         bool usePartialRefresh,
+                         const SensorReadings& readings)
+{
+   if (usePartialRefresh)
+   {
+      display.setPartialWindow(0,
+                               0,
+                               AppConfig::DISPLAY_WIDTH,
+                               AppConfig::DISPLAY_HEIGHT);
+   }
+   else
+   {
+      display.setFullWindow();
+   }
+
+   display.firstPage();
+   do
+   {
+      SamplingMenuScreen::drawDeepSleepMenu(display, selectedRow, readings);
+   } while (display.nextPage());
+}
+
+void renderAppConnectMenu(SamplingMenu::AppDurationRow selectedRow,
+                          bool usePartialRefresh,
+                          const SensorReadings& readings)
+{
+   if (usePartialRefresh)
+   {
+      display.setPartialWindow(0,
+                               0,
+                               AppConfig::DISPLAY_WIDTH,
+                               AppConfig::DISPLAY_HEIGHT);
+   }
+   else
+   {
+      display.setFullWindow();
+   }
+
+   display.firstPage();
+   do
+   {
+      SamplingMenuScreen::drawAppConnectMenu(display, selectedRow, readings);
+   } while (display.nextPage());
+}
+
+void renderPhonePromptScreen(const SensorReadings& readings)
+{
+   display.setFullWindow();
+
+   display.firstPage();
+   do
+   {
+      PhonePromptScreen::draw(display, readings);
+   } while (display.nextPage());
+}
 } // namespace DisplayManager

@@ -2,55 +2,35 @@
 
 #include <Fonts/FreeMonoBold9pt7b.h>
 
-#include "BleSettings.h"
-#include "SamplingMenu.h"
-
 namespace
 {
-struct MenuOptionLayout
-{
-   SamplingMenu::MenuRow row;
-   int boxY;
-};
-
-constexpr MenuOptionLayout OPTION_LAYOUTS[] = {
-    {SamplingMenu::MenuRow::FiveMinutes, 58},
-    {SamplingMenu::MenuRow::OneMinute, 87},
-    {SamplingMenu::MenuRow::ThirtySeconds, 116},
-    {SamplingMenu::MenuRow::BleToggle, 145},
-};
-
-constexpr int MENU_BOX_X = 30;
-constexpr int MENU_BOX_WIDTH = 140;
+constexpr int MENU_BOX_X = 10;
+constexpr int MENU_BOX_WIDTH = 180;
 constexpr int MENU_BOX_HEIGHT = 22;
 constexpr int MENU_BOX_RADIUS = 10;
+constexpr int TITLE_BASELINE_Y = 50;
 
-uint8_t optionIndex(SamplingMenu::MenuRow row)
-{
-   return static_cast<uint8_t>(row);
-}
+constexpr int MODE_OPTION_BOX_Y[] = {78, 107};
+constexpr int THREE_OPTION_BOX_Y[] = {68, 97, 126};
 
-const char* optionLabel(SamplingMenu::MenuRow row)
+void drawCenteredText(WearAwareDisplay& display,
+                      const char* text,
+                      int baselineY)
 {
-   switch (row)
-   {
-      case SamplingMenu::MenuRow::FiveMinutes:
-         return "5 minutes";
-      case SamplingMenu::MenuRow::OneMinute:
-         return "1 minute";
-      case SamplingMenu::MenuRow::ThirtySeconds:
-         return "30 seconds";
-      case SamplingMenu::MenuRow::BleToggle:
-      default:
-         return BleSettings::isEnabled() ? "BLE: ON" : "BLE: OFF";
-   }
+   int16_t x1 = 0;
+   int16_t y1 = 0;
+   uint16_t width = 0;
+   uint16_t height = 0;
+
+   display.getTextBounds(text, 0, 0, &x1, &y1, &width, &height);
+   display.setCursor((display.width() - width) / 2 - x1, baselineY);
+   display.print(text);
 }
 
 void drawCenteredOption(WearAwareDisplay& display,
-                        SamplingMenu::MenuRow row)
+                        const char* label,
+                        int boxY)
 {
-   const char* label = optionLabel(row);
-   const int boxY = OPTION_LAYOUTS[optionIndex(row)].boxY;
    int16_t x1 = 0;
    int16_t y1 = 0;
    uint16_t width = 0;
@@ -72,35 +52,90 @@ void drawCenteredOption(WearAwareDisplay& display,
    display.setCursor(cursorX, cursorY);
    display.print(label);
 }
-}  // namespace
 
-namespace SamplingMenuScreen
+void drawMenu(WearAwareDisplay& display,
+              const char* title,
+              const char* const* labels,
+              const int* boxYPositions,
+              uint8_t optionCount,
+              uint8_t selectedIndex,
+              const SensorReadings& readings)
 {
-void draw(WearAwareDisplay& display,
-          SamplingInterval /*selectedInterval*/,
-          const SensorReadings& readings)
-{
-   const SamplingMenu::MenuRow currentRow = SamplingMenu::selectedRow();
-   const MenuOptionLayout& selectedLayout =
-       OPTION_LAYOUTS[optionIndex(currentRow)];
-
    display.fillScreen(GxEPD_WHITE);
    display.setTextWrap(false);
    ScreenHeader::draw(display, readings.batteryPercent);
 
-   display.setCursor(29, 54);
-   display.print("Sampling menu");
+   drawCenteredText(display, title, TITLE_BASELINE_Y);
 
-   for (const MenuOptionLayout& option : OPTION_LAYOUTS)
+   for (uint8_t i = 0; i < optionCount; ++i)
    {
-      drawCenteredOption(display, option.row);
+      drawCenteredOption(display, labels[i], boxYPositions[i]);
    }
 
    display.drawRoundRect(MENU_BOX_X,
-                         selectedLayout.boxY,
+                         boxYPositions[selectedIndex],
                          MENU_BOX_WIDTH,
                          MENU_BOX_HEIGHT,
                          MENU_BOX_RADIUS,
                          GxEPD_BLACK);
+}
+}  // namespace
+
+namespace SamplingMenuScreen
+{
+void drawModeMenu(WearAwareDisplay& display,
+                  SamplingMenu::ModeRow selectedRow,
+                  const SensorReadings& readings)
+{
+   const char* labels[] = {
+       "Connect to app",
+       "Deep sleep sample",
+   };
+
+   drawMenu(display,
+            "Choose mode",
+            labels,
+            MODE_OPTION_BOX_Y,
+            sizeof(labels) / sizeof(labels[0]),
+            static_cast<uint8_t>(selectedRow),
+            readings);
+}
+
+void drawDeepSleepMenu(WearAwareDisplay& display,
+                       SamplingMenu::DeepSleepRow selectedRow,
+                       const SensorReadings& readings)
+{
+   const char* labels[] = {
+       "5 minutes",
+       "3 minutes",
+       "1 minute",
+   };
+
+   drawMenu(display,
+            "Deep sleep",
+            labels,
+            THREE_OPTION_BOX_Y,
+            sizeof(labels) / sizeof(labels[0]),
+            static_cast<uint8_t>(selectedRow),
+            readings);
+}
+
+void drawAppConnectMenu(WearAwareDisplay& display,
+                        SamplingMenu::AppDurationRow selectedRow,
+                        const SensorReadings& readings)
+{
+   const char* labels[] = {
+       "60 seconds",
+       "30 seconds",
+       "15 seconds",
+   };
+
+   drawMenu(display,
+            "Connect to app",
+            labels,
+            THREE_OPTION_BOX_Y,
+            sizeof(labels) / sizeof(labels[0]),
+            static_cast<uint8_t>(selectedRow),
+            readings);
 }
 }  // namespace SamplingMenuScreen
