@@ -19,8 +19,7 @@ enum class MenuState : uint8_t
 {
    ChooseMode = 0,
    DeepSleepDuration = 1,
-   AppConnectionDuration = 2,
-   PhonePrompt = 3
+   AppConnectionDuration = 2
 };
 
 MenuState currentState = MenuState::ChooseMode;
@@ -87,6 +86,57 @@ SamplingInterval intervalFromRow(SamplingMenu::DeepSleepRow row)
    }
 }
 
+SamplingMenu::AppDurationRow rowFromUpdateInterval(
+    BleSettings::UpdateInterval interval)
+{
+   switch (interval)
+   {
+      case BleSettings::UpdateInterval::SixtySeconds:
+         return SamplingMenu::AppDurationRow::SixtySeconds;
+      case BleSettings::UpdateInterval::ThirtySeconds:
+         return SamplingMenu::AppDurationRow::ThirtySeconds;
+      case BleSettings::UpdateInterval::FifteenSeconds:
+      default:
+         return SamplingMenu::AppDurationRow::FifteenSeconds;
+   }
+}
+
+BleSettings::UpdateInterval updateIntervalFromRow(
+    SamplingMenu::AppDurationRow row)
+{
+   switch (row)
+   {
+      case SamplingMenu::AppDurationRow::SixtySeconds:
+         return BleSettings::UpdateInterval::SixtySeconds;
+      case SamplingMenu::AppDurationRow::ThirtySeconds:
+         return BleSettings::UpdateInterval::ThirtySeconds;
+      case SamplingMenu::AppDurationRow::FifteenSeconds:
+      default:
+         return BleSettings::UpdateInterval::FifteenSeconds;
+   }
+}
+
+SamplingMenu::MenuSelection makeDeepSleepSelection(
+    SamplingMenu::DeepSleepRow row)
+{
+   SamplingMenu::MenuSelection selection;
+   selection.mode = SamplingMenu::ModeRow::DeepSleepSample;
+   selection.deepSleepInterval = intervalFromRow(row);
+   selection.bleUpdateInterval = BleSettings::getUpdateInterval();
+   return selection;
+}
+
+SamplingMenu::MenuSelection makeAppConnectSelection(
+    SamplingMenu::AppDurationRow row)
+{
+   SamplingMenu::MenuSelection selection;
+   selection.mode = SamplingMenu::ModeRow::ConnectToApp;
+   selection.deepSleepInterval =
+       SamplingSettings::getSelectedInterval();
+   selection.bleUpdateInterval = updateIntervalFromRow(row);
+   return selection;
+}
+
 void renderCurrentScreen(bool usePartialRefresh,
                          const SensorReadings& readings)
 {
@@ -107,9 +157,10 @@ void renderCurrentScreen(bool usePartialRefresh,
                                               usePartialRefresh,
                                               readings);
          return;
-      case MenuState::PhonePrompt:
       default:
-         DisplayManager::renderPhonePromptScreen(readings);
+         DisplayManager::renderModeMenu(currentModeRow,
+                                        usePartialRefresh,
+                                        readings);
          return;
    }
 }
@@ -117,13 +168,14 @@ void renderCurrentScreen(bool usePartialRefresh,
 
 namespace SamplingMenu
 {
-void run(const SensorReadings& readings)
+MenuSelection run(const SensorReadings& readings)
 {
    currentState = MenuState::ChooseMode;
    currentModeRow = ModeRow::ConnectToApp;
    currentDeepSleepRow =
        rowFromInterval(SamplingSettings::getSelectedInterval());
-   currentAppDurationRow = AppDurationRow::SixtySeconds;
+   currentAppDurationRow =
+       rowFromUpdateInterval(BleSettings::getUpdateInterval());
 
    BleSettings::setEnabled(false);
    renderCurrentScreen(false, readings);
@@ -151,7 +203,6 @@ void run(const SensorReadings& readings)
                                                    APP_DURATION_ROW_COUNT);
                renderCurrentScreen(true, readings);
                break;
-            case MenuState::PhonePrompt:
             default:
                break;
          }
@@ -178,7 +229,6 @@ void run(const SensorReadings& readings)
                                                APP_DURATION_ROW_COUNT);
                renderCurrentScreen(true, readings);
                break;
-            case MenuState::PhonePrompt:
             default:
                break;
          }
@@ -209,22 +259,13 @@ void run(const SensorReadings& readings)
                renderCurrentScreen(false, readings);
                break;
             case MenuState::DeepSleepDuration:
-               SamplingSettings::setSelectedInterval(
-                   intervalFromRow(currentDeepSleepRow));
                BleSettings::setEnabled(false);
                DisplayManager::forceNextFullRefresh();
-               return;
+               return makeDeepSleepSelection(currentDeepSleepRow);
             case MenuState::AppConnectionDuration:
-               currentState = MenuState::PhonePrompt;
                DisplayManager::forceNextFullRefresh();
-               renderCurrentScreen(false, readings);
-               break;
-            case MenuState::PhonePrompt:
+               return makeAppConnectSelection(currentAppDurationRow);
             default:
-               BleSettings::setEnabled(false);
-               currentState = MenuState::ChooseMode;
-               DisplayManager::forceNextFullRefresh();
-               renderCurrentScreen(false, readings);
                break;
          }
 
@@ -233,5 +274,8 @@ void run(const SensorReadings& readings)
 
       delay(20);
    }
+
+   MenuSelection selection;
+   return selection;
 }
 }  // namespace SamplingMenu

@@ -1,11 +1,47 @@
 #include <Arduino.h>
 
+#include "BleEnvironment.h"
 #include "BleSettings.h"
 #include "DisplayManager.h"
 #include "PowerManager.h"
 #include "SamplingMenu.h"
 #include "SamplingSettings.h"
 #include "Sensors.h"
+
+namespace
+{
+void runMenuFlow()
+{
+   SensorReadings menuReadings;
+   menuReadings.batteryPercent = Sensors::batteryPercentForMenu();
+
+   DisplayManager::init();
+
+   while (true)
+   {
+      const SamplingMenu::MenuSelection selection =
+          SamplingMenu::run(menuReadings);
+
+      if (selection.mode == SamplingMenu::ModeRow::ConnectToApp)
+      {
+         BleSettings::setEnabled(true);
+         BleSettings::setUpdateInterval(selection.bleUpdateInterval);
+
+         Sensors::init();
+         const SensorReadings initialReadings = Sensors::readAll();
+         menuReadings = BleEnvironment::run(initialReadings);
+         menuReadings.batteryPercent = Sensors::batteryPercentForMenu();
+         DisplayManager::forceNextFullRefresh();
+         continue;
+      }
+
+      SamplingSettings::setSelectedInterval(selection.deepSleepInterval);
+      BleSettings::setEnabled(false);
+      DisplayManager::renderWaitingForDataScreen(menuReadings);
+      return;
+   }
+}
+}  // namespace
 
 void setup()
 {
@@ -18,11 +54,7 @@ void setup()
 
    if (PowerManager::shouldEnterSamplingMenu())
    {
-      SensorReadings menuReadings;
-      menuReadings.batteryPercent = Sensors::batteryPercentForMenu();
-      DisplayManager::init();
-      SamplingMenu::run(menuReadings);
-      DisplayManager::renderWaitingForDataScreen(menuReadings);
+      runMenuFlow();
    }
 
    Sensors::init();

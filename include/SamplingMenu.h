@@ -2,7 +2,9 @@
 
 #include <Arduino.h>
 
+#include "BleSettings.h"
 #include "SensorReadings.h"
+#include "SamplingSettings.h"
 
 namespace SamplingMenu
 {
@@ -26,5 +28,28 @@ enum class AppDurationRow : uint8_t
    FifteenSeconds = 2
 };
 
-void run(const SensorReadings& readings);
+struct MenuSelection
+{
+   ModeRow mode;
+   SamplingInterval deepSleepInterval;
+   BleSettings::UpdateInterval bleUpdateInterval;
+
+   MenuSelection()
+       : mode(ModeRow::DeepSleepSample),
+         deepSleepInterval(SamplingInterval::FiveMinutes),
+         bleUpdateInterval(BleSettings::UpdateInterval::SixtySeconds)
+   {
+   }
+
+   MenuSelection(ModeRow selectedMode,
+                 SamplingInterval selectedDeepSleepInterval,
+                 BleSettings::UpdateInterval selectedBleUpdateInterval)
+       : mode(selectedMode),
+         deepSleepInterval(selectedDeepSleepInterval),
+         bleUpdateInterval(selectedBleUpdateInterval)
+   {
+   }
+};
+
+MenuSelection run(const SensorReadings& readings);
 }  // namespace SamplingMenu

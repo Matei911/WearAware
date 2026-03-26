@@ -15,6 +15,8 @@
 
 namespace
 {
+constexpr int16_t SENSOR_NO_ERROR = 0;
+
 SparkFunBMV080SPI bmv080;
 BME690_7semi bme(0x76, BME690_7semi::MODE_I2C);
 SensirionI2cStcc4 stcc4;
@@ -23,6 +25,7 @@ RV3028 rtc;
 bool powerRailEnabled = false;
 bool wire1Initialized = false;
 bool batteryGaugeInitialized = false;
+bool sensorsInitialized = false;
 RTC_DATA_ATTR float lastBatteryPercent = -1.0f;
 
 bool hasCachedBatteryPercent()
@@ -125,6 +128,16 @@ void ensureBatteryGauge()
    batteryGaugeInitialized = true;
 }
 
+void queueStcc4SingleShot()
+{
+   const int16_t error = stcc4.measureSingleShot();
+
+   if (error != SENSOR_NO_ERROR)
+   {
+      Serial.printf("STCC4 single shot failed: %d\n", error);
+   }
+}
+
 void readBmv(SensorReadings& readings)
 {
    digitalWrite(AppConfig::BMV_CS_PIN, LOW);
@@ -156,7 +169,7 @@ void readBme(SensorReadings& readings)
 
    readings.temperature = bme.getTemperature();
    readings.humidity = bme.getHumidity();
-   readings.pressure = bme.getPressure() / 100.0f;
+   readings.pressure = bme.getPressure();
 }
 
 void readStcc4(SensorReadings& readings)
@@ -165,9 +178,27 @@ void readStcc4(SensorReadings& readings)
    float temperature = 0.0f;
    float humidity = 0.0f;
    uint16_t status = 0;
+   int16_t error =
+       stcc4.readMeasurement(co2ppm, temperature, humidity, status);
 
-   stcc4.readMeasurement(co2ppm, temperature, humidity, status);
+   if (error != SENSOR_NO_ERROR)
+   {
+      delay(150);
+      error = stcc4.readMeasurement(co2ppm,
+                                    temperature,
+                                    humidity,
+                                    status);
+   }
+
+   if (error != SENSOR_NO_ERROR)
+   {
+      Serial.printf("STCC4 read failed: %d\n", error);
+      queueStcc4SingleShot();
+      return;
+   }
+
    readings.co2ppm = clampToUint16(co2ppm);
+   queueStcc4SingleShot();
 }
 
 void readBattery(SensorReadings& readings)
@@ -194,6 +225,11 @@ namespace Sensors
 {
 void init()
 {
+   if (sensorsInitialized)
+   {
+      return;
+   }
+
    ensurePowerRail();
 
    pinMode(AppConfig::BMV_CS_PIN, OUTPUT);
@@ -218,7 +254,7 @@ void init()
 
    stcc4.begin(Wire1, STCC4_I2C_ADDR_64);
    stcc4.stopContinuousMeasurement();
-   stcc4.measureSingleShot();
+   queueStcc4SingleShot();
 
    bmv080.begin(AppConfig::BMV_CS_PIN, SPI);
    bmv080.init();
@@ -227,6 +263,7 @@ void init()
 
    ensureBatteryGauge();
    rtc.begin(Wire1);
+   sensorsInitialized = true;
 }
 
 float readBatteryPercent()
