@@ -40,9 +40,6 @@ void waitForButtonsReleased()
 
 void enterDeepSleep(uint64_t sleepDurationUs)
 {
-   digitalWrite(AppConfig::EN_LDO2_PIN, LOW);
-   digitalWrite(AppConfig::DISPLAY_POWER_PIN, HIGH);
-
    waitForButtonsReleased();
 
    esp_sleep_enable_timer_wakeup(sleepDurationUs);

@@ -6,16 +6,9 @@
 #include <NimBLEDevice.h>
 #include <math.h>
 
-#include "AppConfig.h"
-#include "BleSettings.h"
-#include "DisplayManager.h"
-#include "PowerManager.h"
-#include "Sensors.h"
-
 namespace
 {
 constexpr char DEVICE_NAME[] = "WearAware";
-constexpr uint16_t BUTTON_DEBOUNCE_MS = 300;
 constexpr uint8_t CHARACTERISTIC_COUNT = 8;
 
 NimBLEUUID serviceUUID("0000181a-0000-1000-8000-00805f9b34fc");
@@ -44,6 +37,7 @@ NimBLECharacteristic* characteristics[CHARACTERISTIC_COUNT] = {
 };
 bool deviceConnected = false;
 bool restartAdvertisingOnDisconnect = true;
+bool runtimeActive = false;
 
 class ServerCallbacks : public NimBLEServerCallbacks
 {
@@ -70,21 +64,6 @@ class ServerCallbacks : public NimBLEServerCallbacks
 };
 
 ServerCallbacks serverCallbacks;
-
-bool buttonPressed(int pin)
-{
-   return digitalRead(pin) == LOW;
-}
-
-void waitForButtonRelease(int pin)
-{
-   while (digitalRead(pin) == LOW)
-   {
-      delay(10);
-   }
-
-   delay(BUTTON_DEBOUNCE_MS);
-}
 
 void clearCharacteristicPointers()
 {
@@ -113,18 +92,35 @@ void setInt32Value(NimBLECharacteristic* characteristic, int32_t value)
 void logReadings(const SensorReadings& readings)
 {
    Serial.println("BLE environment update:");
-   Serial.printf("Temp: %ld\n", static_cast<long>(roundedInt32(readings.temperature)));
-   Serial.printf("Hum : %ld\n", static_cast<long>(roundedInt32(readings.humidity)));
-   Serial.printf("Pres: %ld\n", static_cast<long>(roundedInt32(readings.pressure)));
+   Serial.printf("Temp: %ld\n",
+                 static_cast<long>(roundedInt32(readings.temperature)));
+   Serial.printf("Hum : %ld\n",
+                 static_cast<long>(roundedInt32(readings.humidity)));
+   Serial.printf("Pres: %ld\n",
+                 static_cast<long>(roundedInt32(readings.pressure)));
    Serial.printf("CO2 : %u\n", readings.co2ppm);
    Serial.printf("PM1 : %u\n", readings.pm1);
    Serial.printf("PM25: %u\n", readings.pm25);
    Serial.printf("PM10: %u\n", readings.pm10);
-   Serial.printf("Batt: %ld\n", static_cast<long>(roundedInt32(readings.batteryPercent)));
+   Serial.printf("Batt: %ld\n",
+                 static_cast<long>(roundedInt32(readings.batteryPercent)));
 }
 
 void publishReadings(const SensorReadings& readings)
 {
+   if (!runtimeActive)
+   {
+      return;
+   }
+
+   for (uint8_t i = 0; i < CHARACTERISTIC_COUNT; ++i)
+   {
+      if (characteristics[i] == nullptr)
+      {
+         return;
+      }
+   }
+
    setInt32Value(characteristics[0], roundedInt32(readings.temperature));
    setInt32Value(characteristics[1], roundedInt32(readings.humidity));
    setInt32Value(characteristics[2], roundedInt32(readings.pressure));
@@ -132,7 +128,8 @@ void publishReadings(const SensorReadings& readings)
    setInt32Value(characteristics[4], static_cast<int32_t>(readings.pm1));
    setInt32Value(characteristics[5], static_cast<int32_t>(readings.pm25));
    setInt32Value(characteristics[6], static_cast<int32_t>(readings.pm10));
-   setInt32Value(characteristics[7], roundedInt32(readings.batteryPercent));
+   setInt32Value(characteristics[7],
+                 roundedInt32(readings.batteryPercent));
 
    if (!deviceConnected)
    {
@@ -144,9 +141,13 @@ void publishReadings(const SensorReadings& readings)
       characteristics[i]->notify();
    }
 }
+}  // namespace
 
+namespace BleEnvironment
+{
 bool start(const SensorReadings& initialReadings)
 {
+   runtimeActive = false;
    server = nullptr;
    deviceConnected = false;
    restartAdvertisingOnDisconnect = true;
@@ -177,7 +178,6 @@ bool start(const SensorReadings& initialReadings)
           NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
    }
 
-   publishReadings(initialReadings);
    service->start();
 
    NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
@@ -202,15 +202,31 @@ bool start(const SensorReadings& initialReadings)
                  advDataOk ? "ok" : "failed",
                  scanDataOk ? "ok" : "failed",
                  advertisingStarted ? "yes" : "no");
+
+   if (!advDataOk || !scanDataOk || !advertisingStarted)
+   {
+      stop();
+      return false;
+   }
+
+   runtimeActive = true;
+   publishReadings(initialReadings);
    Serial.println("BLE advertising started");
    logReadings(initialReadings);
-   return advDataOk && scanDataOk && advertisingStarted;
+   return true;
+}
+
+void publish(const SensorReadings& readings)
+{
+   publishReadings(readings);
+   logReadings(readings);
 }
 
 void stop()
 {
    restartAdvertisingOnDisconnect = false;
    deviceConnected = false;
+   runtimeActive = false;
 
    if (server != nullptr)
    {
@@ -230,50 +246,9 @@ void stop()
    clearCharacteristicPointers();
    Serial.println("BLE stopped");
 }
-}  // namespace
 
-namespace BleEnvironment
+bool isRunning()
 {
-SensorReadings run(const SensorReadings& initialReadings)
-{
-   SensorReadings latestReadings = initialReadings;
-
-   if (!start(latestReadings))
-   {
-      BleSettings::setEnabled(false);
-      return latestReadings;
-   }
-
-   DisplayManager::forceNextFullRefresh();
-   DisplayManager::renderPhonePromptScreen(latestReadings);
-   PowerManager::waitForButtonsReleased();
-
-   const uint32_t updateIntervalMs =
-       BleSettings::selectedUpdateIntervalMs();
-   unsigned long lastUpdateMs = millis();
-
-   while (true)
-   {
-      if (buttonPressed(AppConfig::BUTTON_PIN_1))
-      {
-         waitForButtonRelease(AppConfig::BUTTON_PIN_1);
-         break;
-      }
-
-      const unsigned long now = millis();
-      if (now - lastUpdateMs >= updateIntervalMs)
-      {
-         lastUpdateMs = now;
-         latestReadings = Sensors::readAll();
-         publishReadings(latestReadings);
-         logReadings(latestReadings);
-      }
-
-      delay(20);
-   }
-
-   stop();
-   BleSettings::setEnabled(false);
-   return latestReadings;
+   return runtimeActive;
 }
 }  // namespace BleEnvironment

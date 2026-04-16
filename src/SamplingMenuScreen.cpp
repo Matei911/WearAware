@@ -88,8 +88,8 @@ void drawModeMenu(WearAwareDisplay& display,
                   const SensorReadings& readings)
 {
    const char* labels[] = {
-       "Connect to app",
-       "Deep sleep sample",
+       "Device Mode",
+       "App Mode",
    };
 
    drawMenu(display,
@@ -101,9 +101,10 @@ void drawModeMenu(WearAwareDisplay& display,
             readings);
 }
 
-void drawDeepSleepMenu(WearAwareDisplay& display,
-                       SamplingMenu::DeepSleepRow selectedRow,
-                       const SensorReadings& readings)
+void drawDeviceIntervalMenu(
+    WearAwareDisplay& display,
+    SamplingMenu::DeviceIntervalRow selectedRow,
+    const SensorReadings& readings)
 {
    const char* labels[] = {
        "5 minutes",
@@ -112,7 +113,7 @@ void drawDeepSleepMenu(WearAwareDisplay& display,
    };
 
    drawMenu(display,
-            "Deep sleep",
+            "Device Mode",
             labels,
             THREE_OPTION_BOX_Y,
             sizeof(labels) / sizeof(labels[0]),
@@ -120,9 +121,9 @@ void drawDeepSleepMenu(WearAwareDisplay& display,
             readings);
 }
 
-void drawAppConnectMenu(WearAwareDisplay& display,
-                        SamplingMenu::AppDurationRow selectedRow,
-                        const SensorReadings& readings)
+void drawAppIntervalMenu(WearAwareDisplay& display,
+                         SamplingMenu::AppIntervalRow selectedRow,
+                         const SensorReadings& readings)
 {
    const char* labels[] = {
        "60 seconds",
@@ -131,7 +132,7 @@ void drawAppConnectMenu(WearAwareDisplay& display,
    };
 
    drawMenu(display,
-            "Connect to app",
+            "App Mode",
             labels,
             THREE_OPTION_BOX_Y,
             sizeof(labels) / sizeof(labels[0]),

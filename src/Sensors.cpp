@@ -22,10 +22,13 @@ BME690_7semi bme(0x76, BME690_7semi::MODE_I2C);
 SensirionI2cStcc4 stcc4;
 Adafruit_MAX17048 maxlipo;
 RV3028 rtc;
+
 bool powerRailEnabled = false;
+bool wireInitialized = false;
 bool wire1Initialized = false;
-bool batteryGaugeInitialized = false;
-bool sensorsInitialized = false;
+bool measurementDevicesReady = false;
+bool batteryGaugeReady = false;
+bool rtcReady = false;
 RTC_DATA_ATTR float lastBatteryPercent = -1.0f;
 
 bool hasCachedBatteryPercent()
@@ -102,6 +105,19 @@ void ensurePowerRail()
    powerRailEnabled = true;
 }
 
+void ensureWire()
+{
+   if (wireInitialized)
+   {
+      return;
+   }
+
+   Wire.begin(AppConfig::SDA_PIN0,
+              AppConfig::SCL_PIN0,
+              AppConfig::I2C_FREQ_0);
+   wireInitialized = true;
+}
+
 void ensureWire1()
 {
    if (wire1Initialized)
@@ -115,19 +131,6 @@ void ensureWire1()
    wire1Initialized = true;
 }
 
-void ensureBatteryGauge()
-{
-   if (batteryGaugeInitialized)
-   {
-      return;
-   }
-
-   ensurePowerRail();
-   ensureWire1();
-   maxlipo.begin(&Wire1);
-   batteryGaugeInitialized = true;
-}
-
 void queueStcc4SingleShot()
 {
    const int16_t error = stcc4.measureSingleShot();
@@ -136,6 +139,70 @@ void queueStcc4SingleShot()
    {
       Serial.printf("STCC4 single shot failed: %d\n", error);
    }
+}
+
+void ensureMeasurementDevices()
+{
+   if (measurementDevicesReady)
+   {
+      return;
+   }
+
+   ensurePowerRail();
+   ensureWire();
+   ensureWire1();
+
+   pinMode(AppConfig::BMV_CS_PIN, OUTPUT);
+   digitalWrite(AppConfig::BMV_CS_PIN, HIGH);
+
+   pinMode(AppConfig::EPD_CS, OUTPUT);
+   digitalWrite(AppConfig::EPD_CS, HIGH);
+
+   if (!bme.begin(Wire))
+   {
+      Serial.println("BME690 failed");
+      while (true)
+      {
+         delay(1000);
+      }
+   }
+
+   stcc4.begin(Wire1, STCC4_I2C_ADDR_64);
+   stcc4.stopContinuousMeasurement();
+   queueStcc4SingleShot();
+
+   bmv080.begin(AppConfig::BMV_CS_PIN, SPI);
+   bmv080.init();
+   bmv080.setMode(SF_BMV080_MODE_CONTINUOUS);
+   delay(2000);
+
+   measurementDevicesReady = true;
+}
+
+void ensureBatteryGauge()
+{
+   if (batteryGaugeReady)
+   {
+      return;
+   }
+
+   ensurePowerRail();
+   ensureWire1();
+   maxlipo.begin(&Wire1);
+   batteryGaugeReady = true;
+}
+
+void ensureRtc()
+{
+   if (rtcReady)
+   {
+      return;
+   }
+
+   ensurePowerRail();
+   ensureWire1();
+   rtc.begin(Wire1);
+   rtcReady = true;
 }
 
 void readBmv(SensorReadings& readings)
@@ -208,6 +275,8 @@ void readBattery(SensorReadings& readings)
 
 void readRtc(SensorReadings& readings)
 {
+   ensureRtc();
+
    if (!rtc.updateTime())
    {
       readings.timestamp[0] = '\0';
@@ -223,47 +292,30 @@ void readRtc(SensorReadings& readings)
 
 namespace Sensors
 {
+void wake()
+{
+   ensureMeasurementDevices();
+   ensureBatteryGauge();
+   ensureRtc();
+}
+
 void init()
 {
-   if (sensorsInitialized)
+   wake();
+}
+
+void sleep()
+{
+   if (!powerRailEnabled)
    {
       return;
    }
 
-   ensurePowerRail();
-
-   pinMode(AppConfig::BMV_CS_PIN, OUTPUT);
-   digitalWrite(AppConfig::BMV_CS_PIN, HIGH);
-
-   pinMode(AppConfig::EPD_CS, OUTPUT);
-   digitalWrite(AppConfig::EPD_CS, HIGH);
-
-   Wire.begin(AppConfig::SDA_PIN0,
-              AppConfig::SCL_PIN0,
-              AppConfig::I2C_FREQ_0);
-   ensureWire1();
-
-   if (!bme.begin(Wire))
-   {
-      Serial.println("BME690 failed");
-      while (true)
-      {
-         delay(1000);
-      }
-   }
-
-   stcc4.begin(Wire1, STCC4_I2C_ADDR_64);
-   stcc4.stopContinuousMeasurement();
-   queueStcc4SingleShot();
-
-   bmv080.begin(AppConfig::BMV_CS_PIN, SPI);
-   bmv080.init();
-   bmv080.setMode(SF_BMV080_MODE_CONTINUOUS);
-   delay(2000);
-
-   ensureBatteryGauge();
-   rtc.begin(Wire1);
-   sensorsInitialized = true;
+   digitalWrite(AppConfig::EN_LDO2_PIN, LOW);
+   powerRailEnabled = false;
+   measurementDevicesReady = false;
+   batteryGaugeReady = false;
+   rtcReady = false;
 }
 
 float readBatteryPercent()
@@ -288,6 +340,8 @@ float batteryPercentForMenu()
 
 SensorReadings readAll()
 {
+   wake();
+
    SensorReadings readings;
 
    readBmv(readings);

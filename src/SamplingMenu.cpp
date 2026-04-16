@@ -3,31 +3,31 @@
 #include <Arduino.h>
 
 #include "AppConfig.h"
-#include "BleSettings.h"
 #include "DisplayManager.h"
+#include "ModeSettings.h"
 #include "PowerManager.h"
-#include "SamplingSettings.h"
 
 namespace
 {
 constexpr uint16_t BUTTON_DEBOUNCE_MS = 300;
 constexpr uint8_t MODE_ROW_COUNT = 2;
-constexpr uint8_t DEEP_SLEEP_ROW_COUNT = 3;
-constexpr uint8_t APP_DURATION_ROW_COUNT = 3;
+constexpr uint8_t DEVICE_INTERVAL_ROW_COUNT = 3;
+constexpr uint8_t APP_INTERVAL_ROW_COUNT = 3;
 
 enum class MenuState : uint8_t
 {
    ChooseMode = 0,
-   DeepSleepDuration = 1,
-   AppConnectionDuration = 2
+   DeviceInterval = 1,
+   AppInterval = 2
 };
 
 MenuState currentState = MenuState::ChooseMode;
-SamplingMenu::ModeRow currentModeRow = SamplingMenu::ModeRow::ConnectToApp;
-SamplingMenu::DeepSleepRow currentDeepSleepRow =
-    SamplingMenu::DeepSleepRow::FiveMinutes;
-SamplingMenu::AppDurationRow currentAppDurationRow =
-    SamplingMenu::AppDurationRow::SixtySeconds;
+SamplingMenu::ModeRow currentModeRow =
+    SamplingMenu::ModeRow::DeviceMode;
+SamplingMenu::DeviceIntervalRow currentDeviceIntervalRow =
+    SamplingMenu::DeviceIntervalRow::FiveMinutes;
+SamplingMenu::AppIntervalRow currentAppIntervalRow =
+    SamplingMenu::AppIntervalRow::SixtySeconds;
 
 bool buttonPressed(int pin)
 {
@@ -58,82 +58,81 @@ RowType previousRow(RowType row, uint8_t rowCount)
    return static_cast<RowType>((rowIndex + rowCount - 1) % rowCount);
 }
 
-SamplingMenu::DeepSleepRow rowFromInterval(SamplingInterval interval)
+SamplingMenu::DeviceIntervalRow rowFromDeviceInterval(
+    DeviceInterval interval)
 {
    switch (interval)
    {
-      case SamplingInterval::FiveMinutes:
-         return SamplingMenu::DeepSleepRow::FiveMinutes;
-      case SamplingInterval::ThreeMinutes:
-         return SamplingMenu::DeepSleepRow::ThreeMinutes;
-      case SamplingInterval::OneMinute:
+      case DeviceInterval::FiveMinutes:
+         return SamplingMenu::DeviceIntervalRow::FiveMinutes;
+      case DeviceInterval::ThreeMinutes:
+         return SamplingMenu::DeviceIntervalRow::ThreeMinutes;
+      case DeviceInterval::OneMinute:
       default:
-         return SamplingMenu::DeepSleepRow::OneMinute;
+         return SamplingMenu::DeviceIntervalRow::OneMinute;
    }
 }
 
-SamplingInterval intervalFromRow(SamplingMenu::DeepSleepRow row)
+DeviceInterval deviceIntervalFromRow(
+    SamplingMenu::DeviceIntervalRow row)
 {
    switch (row)
    {
-      case SamplingMenu::DeepSleepRow::FiveMinutes:
-         return SamplingInterval::FiveMinutes;
-      case SamplingMenu::DeepSleepRow::ThreeMinutes:
-         return SamplingInterval::ThreeMinutes;
-      case SamplingMenu::DeepSleepRow::OneMinute:
+      case SamplingMenu::DeviceIntervalRow::FiveMinutes:
+         return DeviceInterval::FiveMinutes;
+      case SamplingMenu::DeviceIntervalRow::ThreeMinutes:
+         return DeviceInterval::ThreeMinutes;
+      case SamplingMenu::DeviceIntervalRow::OneMinute:
       default:
-         return SamplingInterval::OneMinute;
+         return DeviceInterval::OneMinute;
    }
 }
 
-SamplingMenu::AppDurationRow rowFromUpdateInterval(
-    BleSettings::UpdateInterval interval)
+SamplingMenu::AppIntervalRow rowFromAppInterval(AppInterval interval)
 {
    switch (interval)
    {
-      case BleSettings::UpdateInterval::SixtySeconds:
-         return SamplingMenu::AppDurationRow::SixtySeconds;
-      case BleSettings::UpdateInterval::ThirtySeconds:
-         return SamplingMenu::AppDurationRow::ThirtySeconds;
-      case BleSettings::UpdateInterval::FifteenSeconds:
+      case AppInterval::SixtySeconds:
+         return SamplingMenu::AppIntervalRow::SixtySeconds;
+      case AppInterval::ThirtySeconds:
+         return SamplingMenu::AppIntervalRow::ThirtySeconds;
+      case AppInterval::FifteenSeconds:
       default:
-         return SamplingMenu::AppDurationRow::FifteenSeconds;
+         return SamplingMenu::AppIntervalRow::FifteenSeconds;
    }
 }
 
-BleSettings::UpdateInterval updateIntervalFromRow(
-    SamplingMenu::AppDurationRow row)
+AppInterval appIntervalFromRow(SamplingMenu::AppIntervalRow row)
 {
    switch (row)
    {
-      case SamplingMenu::AppDurationRow::SixtySeconds:
-         return BleSettings::UpdateInterval::SixtySeconds;
-      case SamplingMenu::AppDurationRow::ThirtySeconds:
-         return BleSettings::UpdateInterval::ThirtySeconds;
-      case SamplingMenu::AppDurationRow::FifteenSeconds:
+      case SamplingMenu::AppIntervalRow::SixtySeconds:
+         return AppInterval::SixtySeconds;
+      case SamplingMenu::AppIntervalRow::ThirtySeconds:
+         return AppInterval::ThirtySeconds;
+      case SamplingMenu::AppIntervalRow::FifteenSeconds:
       default:
-         return BleSettings::UpdateInterval::FifteenSeconds;
+         return AppInterval::FifteenSeconds;
    }
 }
 
-SamplingMenu::MenuSelection makeDeepSleepSelection(
-    SamplingMenu::DeepSleepRow row)
+SamplingMenu::MenuSelection makeDeviceModeSelection(
+    SamplingMenu::DeviceIntervalRow row)
 {
    SamplingMenu::MenuSelection selection;
-   selection.mode = SamplingMenu::ModeRow::DeepSleepSample;
-   selection.deepSleepInterval = intervalFromRow(row);
-   selection.bleUpdateInterval = BleSettings::getUpdateInterval();
+   selection.mode = SamplingMenu::ModeRow::DeviceMode;
+   selection.deviceInterval = deviceIntervalFromRow(row);
+   selection.appInterval = ModeSettings::getAppInterval();
    return selection;
 }
 
-SamplingMenu::MenuSelection makeAppConnectSelection(
-    SamplingMenu::AppDurationRow row)
+SamplingMenu::MenuSelection makeAppModeSelection(
+    SamplingMenu::AppIntervalRow row)
 {
    SamplingMenu::MenuSelection selection;
-   selection.mode = SamplingMenu::ModeRow::ConnectToApp;
-   selection.deepSleepInterval =
-       SamplingSettings::getSelectedInterval();
-   selection.bleUpdateInterval = updateIntervalFromRow(row);
+   selection.mode = SamplingMenu::ModeRow::AppMode;
+   selection.deviceInterval = ModeSettings::getDeviceInterval();
+   selection.appInterval = appIntervalFromRow(row);
    return selection;
 }
 
@@ -147,15 +146,16 @@ void renderCurrentScreen(bool usePartialRefresh,
                                         usePartialRefresh,
                                         readings);
          return;
-      case MenuState::DeepSleepDuration:
-         DisplayManager::renderDeepSleepMenu(currentDeepSleepRow,
-                                             usePartialRefresh,
-                                             readings);
+      case MenuState::DeviceInterval:
+         DisplayManager::renderDeviceIntervalMenu(
+             currentDeviceIntervalRow,
+             usePartialRefresh,
+             readings);
          return;
-      case MenuState::AppConnectionDuration:
-         DisplayManager::renderAppConnectMenu(currentAppDurationRow,
-                                              usePartialRefresh,
-                                              readings);
+      case MenuState::AppInterval:
+         DisplayManager::renderAppIntervalMenu(currentAppIntervalRow,
+                                               usePartialRefresh,
+                                               readings);
          return;
       default:
          DisplayManager::renderModeMenu(currentModeRow,
@@ -171,13 +171,13 @@ namespace SamplingMenu
 MenuSelection run(const SensorReadings& readings)
 {
    currentState = MenuState::ChooseMode;
-   currentModeRow = ModeRow::ConnectToApp;
-   currentDeepSleepRow =
-       rowFromInterval(SamplingSettings::getSelectedInterval());
-   currentAppDurationRow =
-       rowFromUpdateInterval(BleSettings::getUpdateInterval());
+   currentModeRow = ModeRow::DeviceMode;
+   currentDeviceIntervalRow =
+       rowFromDeviceInterval(ModeSettings::getDeviceInterval());
+   currentAppIntervalRow =
+       rowFromAppInterval(ModeSettings::getAppInterval());
 
-   BleSettings::setEnabled(false);
+   DisplayManager::wake();
    renderCurrentScreen(false, readings);
    PowerManager::waitForButtonsReleased();
    delay(BUTTON_DEBOUNCE_MS);
@@ -193,14 +193,16 @@ MenuSelection run(const SensorReadings& readings)
                    previousRow(currentModeRow, MODE_ROW_COUNT);
                renderCurrentScreen(true, readings);
                break;
-            case MenuState::DeepSleepDuration:
-               currentDeepSleepRow = previousRow(currentDeepSleepRow,
-                                                 DEEP_SLEEP_ROW_COUNT);
+            case MenuState::DeviceInterval:
+               currentDeviceIntervalRow =
+                   previousRow(currentDeviceIntervalRow,
+                               DEVICE_INTERVAL_ROW_COUNT);
                renderCurrentScreen(true, readings);
                break;
-            case MenuState::AppConnectionDuration:
-               currentAppDurationRow = previousRow(currentAppDurationRow,
-                                                   APP_DURATION_ROW_COUNT);
+            case MenuState::AppInterval:
+               currentAppIntervalRow =
+                   previousRow(currentAppIntervalRow,
+                               APP_INTERVAL_ROW_COUNT);
                renderCurrentScreen(true, readings);
                break;
             default:
@@ -219,14 +221,16 @@ MenuSelection run(const SensorReadings& readings)
                currentModeRow = nextRow(currentModeRow, MODE_ROW_COUNT);
                renderCurrentScreen(true, readings);
                break;
-            case MenuState::DeepSleepDuration:
-               currentDeepSleepRow = nextRow(currentDeepSleepRow,
-                                             DEEP_SLEEP_ROW_COUNT);
+            case MenuState::DeviceInterval:
+               currentDeviceIntervalRow =
+                   nextRow(currentDeviceIntervalRow,
+                           DEVICE_INTERVAL_ROW_COUNT);
                renderCurrentScreen(true, readings);
                break;
-            case MenuState::AppConnectionDuration:
-               currentAppDurationRow = nextRow(currentAppDurationRow,
-                                               APP_DURATION_ROW_COUNT);
+            case MenuState::AppInterval:
+               currentAppIntervalRow =
+                   nextRow(currentAppIntervalRow,
+                           APP_INTERVAL_ROW_COUNT);
                renderCurrentScreen(true, readings);
                break;
             default:
@@ -244,27 +248,18 @@ MenuSelection run(const SensorReadings& readings)
          switch (currentState)
          {
             case MenuState::ChooseMode:
-               if (currentModeRow == ModeRow::ConnectToApp)
-               {
-                  BleSettings::setEnabled(true);
-                  currentState = MenuState::AppConnectionDuration;
-               }
-               else
-               {
-                  BleSettings::setEnabled(false);
-                  currentState = MenuState::DeepSleepDuration;
-               }
-
+               currentState = currentModeRow == ModeRow::AppMode
+                                  ? MenuState::AppInterval
+                                  : MenuState::DeviceInterval;
                DisplayManager::forceNextFullRefresh();
                renderCurrentScreen(false, readings);
                break;
-            case MenuState::DeepSleepDuration:
-               BleSettings::setEnabled(false);
+            case MenuState::DeviceInterval:
                DisplayManager::forceNextFullRefresh();
-               return makeDeepSleepSelection(currentDeepSleepRow);
-            case MenuState::AppConnectionDuration:
+               return makeDeviceModeSelection(currentDeviceIntervalRow);
+            case MenuState::AppInterval:
                DisplayManager::forceNextFullRefresh();
-               return makeAppConnectSelection(currentAppDurationRow);
+               return makeAppModeSelection(currentAppIntervalRow);
             default:
                break;
          }

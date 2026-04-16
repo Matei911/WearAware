@@ -19,12 +19,13 @@ namespace SamplingMenuScreen
 void drawModeMenu(WearAwareDisplay& display,
                   SamplingMenu::ModeRow selectedRow,
                   const SensorReadings& readings);
-void drawDeepSleepMenu(WearAwareDisplay& display,
-                       SamplingMenu::DeepSleepRow selectedRow,
-                       const SensorReadings& readings);
-void drawAppConnectMenu(WearAwareDisplay& display,
-                        SamplingMenu::AppDurationRow selectedRow,
-                        const SensorReadings& readings);
+void drawDeviceIntervalMenu(
+    WearAwareDisplay& display,
+    SamplingMenu::DeviceIntervalRow selectedRow,
+    const SensorReadings& readings);
+void drawAppIntervalMenu(WearAwareDisplay& display,
+                         SamplingMenu::AppIntervalRow selectedRow,
+                         const SensorReadings& readings);
 }  // namespace SamplingMenuScreen
 
 namespace WaitingForDataScreen

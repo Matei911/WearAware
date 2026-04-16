@@ -2,26 +2,25 @@
 
 #include <Arduino.h>
 
-#include "BleSettings.h"
+#include "ModeSettings.h"
 #include "SensorReadings.h"
-#include "SamplingSettings.h"
 
 namespace SamplingMenu
 {
 enum class ModeRow : uint8_t
 {
-   ConnectToApp = 0,
-   DeepSleepSample = 1
+   DeviceMode = 0,
+   AppMode = 1
 };
 
-enum class DeepSleepRow : uint8_t
+enum class DeviceIntervalRow : uint8_t
 {
    FiveMinutes = 0,
    ThreeMinutes = 1,
    OneMinute = 2
 };
 
-enum class AppDurationRow : uint8_t
+enum class AppIntervalRow : uint8_t
 {
    SixtySeconds = 0,
    ThirtySeconds = 1,
@@ -31,22 +30,22 @@ enum class AppDurationRow : uint8_t
 struct MenuSelection
 {
    ModeRow mode;
-   SamplingInterval deepSleepInterval;
-   BleSettings::UpdateInterval bleUpdateInterval;
+   DeviceInterval deviceInterval;
+   AppInterval appInterval;
 
    MenuSelection()
-       : mode(ModeRow::DeepSleepSample),
-         deepSleepInterval(SamplingInterval::FiveMinutes),
-         bleUpdateInterval(BleSettings::UpdateInterval::SixtySeconds)
+       : mode(ModeRow::DeviceMode),
+         deviceInterval(DeviceInterval::FiveMinutes),
+         appInterval(AppInterval::SixtySeconds)
    {
    }
 
    MenuSelection(ModeRow selectedMode,
-                 SamplingInterval selectedDeepSleepInterval,
-                 BleSettings::UpdateInterval selectedBleUpdateInterval)
+                 DeviceInterval selectedDeviceInterval,
+                 AppInterval selectedAppInterval)
        : mode(selectedMode),
-         deepSleepInterval(selectedDeepSleepInterval),
-         bleUpdateInterval(selectedBleUpdateInterval)
+         deviceInterval(selectedDeviceInterval),
+         appInterval(selectedAppInterval)
    {
    }
 };

@@ -2,7 +2,7 @@
 
 #include <Fonts/FreeMonoBold9pt7b.h>
 
-#include "BleSettings.h"
+#include "BleEnvironment.h"
 #include "images.h"
 
 namespace
@@ -22,7 +22,7 @@ int batteryFillWidth(float batteryPercent)
 
 const uint8_t* bleIconBitmap()
 {
-   return BleSettings::isEnabled() ? ble_on : ble_off;
+   return BleEnvironment::isRunning() ? ble_on : ble_off;
 }
 }  // namespace
 

@@ -1,45 +1,134 @@
 #include <Arduino.h>
 
+#include "AppConfig.h"
 #include "BleEnvironment.h"
-#include "BleSettings.h"
 #include "DisplayManager.h"
+#include "ModeSettings.h"
 #include "PowerManager.h"
 #include "SamplingMenu.h"
-#include "SamplingSettings.h"
 #include "Sensors.h"
 
 namespace
 {
-void runMenuFlow()
+constexpr uint16_t BUTTON_DEBOUNCE_MS = 300;
+
+struct AppModeState
 {
-   SensorReadings menuReadings;
-   menuReadings.batteryPercent = Sensors::batteryPercentForMenu();
+   bool active = false;
+   uint32_t updateIntervalMs = 0;
+   unsigned long lastPublishMs = 0;
+};
 
-   DisplayManager::init();
+AppModeState appModeState;
 
+bool buttonPressed(int pin)
+{
+   return digitalRead(pin) == LOW;
+}
+
+void waitForButtonRelease(int pin)
+{
+   while (digitalRead(pin) == LOW)
+   {
+      delay(10);
+   }
+
+   delay(BUTTON_DEBOUNCE_MS);
+}
+
+void stopAppMode()
+{
+   BleEnvironment::stop();
+   appModeState = AppModeState();
+}
+
+void runDeviceCycle()
+{
+   const SensorReadings readings = Sensors::readAll();
+   DisplayManager::renderHomeScreen(readings);
+   DisplayManager::sleep();
+   Sensors::sleep();
+   PowerManager::enterDeepSleep(
+       ModeSettings::selectedDeviceSleepDurationUs());
+}
+
+bool startAppMode()
+{
+   const SensorReadings initialReadings = Sensors::readAll();
+
+   if (!BleEnvironment::start(initialReadings))
+   {
+      Sensors::sleep();
+      return false;
+   }
+
+   DisplayManager::renderPhonePromptScreen(initialReadings);
+   DisplayManager::sleep();
+   Sensors::sleep();
+
+   appModeState.active = true;
+   appModeState.updateIntervalMs =
+       ModeSettings::selectedAppUpdateIntervalMs();
+   appModeState.lastPublishMs = millis();
+   return true;
+}
+
+void runModeMenu()
+{
    while (true)
    {
+      SensorReadings menuReadings;
+      menuReadings.batteryPercent = Sensors::batteryPercentForMenu();
+      Sensors::sleep();
+
       const SamplingMenu::MenuSelection selection =
           SamplingMenu::run(menuReadings);
 
-      if (selection.mode == SamplingMenu::ModeRow::ConnectToApp)
-      {
-         BleSettings::setEnabled(true);
-         BleSettings::setUpdateInterval(selection.bleUpdateInterval);
+      ModeSettings::setDeviceInterval(selection.deviceInterval);
+      ModeSettings::setAppInterval(selection.appInterval);
 
-         Sensors::init();
-         const SensorReadings initialReadings = Sensors::readAll();
-         menuReadings = BleEnvironment::run(initialReadings);
-         menuReadings.batteryPercent = Sensors::batteryPercentForMenu();
-         DisplayManager::forceNextFullRefresh();
+      if (selection.mode == SamplingMenu::ModeRow::AppMode)
+      {
+         if (startAppMode())
+         {
+            return;
+         }
+
          continue;
       }
 
-      SamplingSettings::setSelectedInterval(selection.deepSleepInterval);
-      BleSettings::setEnabled(false);
-      DisplayManager::renderWaitingForDataScreen(menuReadings);
+      runDeviceCycle();
+   }
+}
+
+void tickAppMode()
+{
+   if (!appModeState.active)
+   {
       return;
    }
+
+   if (buttonPressed(AppConfig::BUTTON_PIN_1))
+   {
+      waitForButtonRelease(AppConfig::BUTTON_PIN_1);
+      stopAppMode();
+      runModeMenu();
+      return;
+   }
+
+   const unsigned long now = millis();
+   if (now - appModeState.lastPublishMs < appModeState.updateIntervalMs)
+   {
+      delay(20);
+      return;
+   }
+
+   appModeState.lastPublishMs = now;
+
+   const SensorReadings readings = Sensors::readAll();
+   BleEnvironment::publish(readings);
+   Sensors::sleep();
+   delay(20);
 }
 }  // namespace
 
@@ -49,23 +138,18 @@ void setup()
    delay(200);
 
    PowerManager::init();
-   BleSettings::init();
-   SamplingSettings::init();
+   ModeSettings::init();
 
    if (PowerManager::shouldEnterSamplingMenu())
    {
-      runMenuFlow();
+      runModeMenu();
+      return;
    }
 
-   Sensors::init();
-   const SensorReadings readings = Sensors::readAll();
-
-   BleSettings::setEnabled(false);
-   DisplayManager::init();
-   DisplayManager::renderHomeScreen(readings);
-
-   PowerManager::enterDeepSleep(
-       SamplingSettings::selectedSleepDurationUs());
+   runDeviceCycle();
 }
 
-void loop() {}
+void loop()
+{
+   tickAppMode();
+}
