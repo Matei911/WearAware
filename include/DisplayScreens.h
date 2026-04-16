@@ -37,3 +37,8 @@ namespace PhonePromptScreen
 {
 void draw(WearAwareDisplay& display, const SensorReadings& readings);
 }  // namespace PhonePromptScreen
+
+namespace ConnectedPromptScreen
+{
+void draw(WearAwareDisplay& display, const SensorReadings& readings);
+}  // namespace ConnectedPromptScreen

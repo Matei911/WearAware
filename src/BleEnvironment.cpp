@@ -83,6 +83,11 @@ int32_t roundedInt32(float value)
    return static_cast<int32_t>(lroundf(value));
 }
 
+int32_t batteryPercentForBle(float batteryPercent)
+{
+   return roundedInt32(batteryPercent * 100.0f);
+}
+
 void setInt32Value(NimBLECharacteristic* characteristic, int32_t value)
 {
    characteristic->setValue(reinterpret_cast<const uint8_t*>(&value),
@@ -106,19 +111,24 @@ void logReadings(const SensorReadings& readings)
                  static_cast<long>(roundedInt32(readings.batteryPercent)));
 }
 
-void publishReadings(const SensorReadings& readings)
+bool characteristicsReady()
 {
-   if (!runtimeActive)
-   {
-      return;
-   }
-
    for (uint8_t i = 0; i < CHARACTERISTIC_COUNT; ++i)
    {
       if (characteristics[i] == nullptr)
       {
-         return;
+         return false;
       }
+   }
+
+   return true;
+}
+
+void applyReadingsToCharacteristics(const SensorReadings& readings)
+{
+   if (!characteristicsReady())
+   {
+      return;
    }
 
    setInt32Value(characteristics[0], roundedInt32(readings.temperature));
@@ -129,7 +139,17 @@ void publishReadings(const SensorReadings& readings)
    setInt32Value(characteristics[5], static_cast<int32_t>(readings.pm25));
    setInt32Value(characteristics[6], static_cast<int32_t>(readings.pm10));
    setInt32Value(characteristics[7],
-                 roundedInt32(readings.batteryPercent));
+                 batteryPercentForBle(readings.batteryPercent));
+}
+
+void publishReadings(const SensorReadings& readings)
+{
+   if (!runtimeActive)
+   {
+      return;
+   }
+
+   applyReadingsToCharacteristics(readings);
 
    if (!deviceConnected)
    {
@@ -145,7 +165,7 @@ void publishReadings(const SensorReadings& readings)
 
 namespace BleEnvironment
 {
-bool start(const SensorReadings& initialReadings)
+bool start()
 {
    runtimeActive = false;
    server = nullptr;
@@ -178,6 +198,8 @@ bool start(const SensorReadings& initialReadings)
           NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
    }
 
+   const SensorReadings defaultReadings;
+   applyReadingsToCharacteristics(defaultReadings);
    service->start();
 
    NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
@@ -210,9 +232,7 @@ bool start(const SensorReadings& initialReadings)
    }
 
    runtimeActive = true;
-   publishReadings(initialReadings);
-   Serial.println("BLE advertising started");
-   logReadings(initialReadings);
+   Serial.println("BLE advertising started, waiting for connection");
    return true;
 }
 
@@ -250,5 +270,10 @@ void stop()
 bool isRunning()
 {
    return runtimeActive;
+}
+
+bool isConnected()
+{
+   return deviceConnected;
 }
 }  // namespace BleEnvironment

@@ -15,8 +15,10 @@ constexpr uint16_t BUTTON_DEBOUNCE_MS = 300;
 struct AppModeState
 {
    bool active = false;
+   bool wasConnected = false;
    uint32_t updateIntervalMs = 0;
    unsigned long lastPublishMs = 0;
+   SensorReadings uiReadings;
 };
 
 AppModeState appModeState;
@@ -42,8 +44,20 @@ void stopAppMode()
    appModeState = AppModeState();
 }
 
-void runDeviceCycle()
+void sleepAppModeHardware()
 {
+   DisplayManager::sleep();
+   Sensors::sleep();
+}
+
+void runDeviceCycle(bool showWaitingScreen,
+                    const SensorReadings& transitionReadings)
+{
+   if (showWaitingScreen)
+   {
+      DisplayManager::renderWaitingForDataScreen(transitionReadings);
+   }
+
    const SensorReadings readings = Sensors::readAll();
    DisplayManager::renderHomeScreen(readings);
    DisplayManager::sleep();
@@ -52,24 +66,23 @@ void runDeviceCycle()
        ModeSettings::selectedDeviceSleepDurationUs());
 }
 
-bool startAppMode()
+bool startAppMode(const SensorReadings& menuReadings)
 {
-   const SensorReadings initialReadings = Sensors::readAll();
-
-   if (!BleEnvironment::start(initialReadings))
+   if (!BleEnvironment::start())
    {
-      Sensors::sleep();
+      sleepAppModeHardware();
       return false;
    }
 
-   DisplayManager::renderPhonePromptScreen(initialReadings);
-   DisplayManager::sleep();
-   Sensors::sleep();
-
    appModeState.active = true;
+   appModeState.wasConnected = BleEnvironment::isConnected();
    appModeState.updateIntervalMs =
        ModeSettings::selectedAppUpdateIntervalMs();
-   appModeState.lastPublishMs = millis();
+   appModeState.lastPublishMs = 0;
+   appModeState.uiReadings = menuReadings;
+
+   DisplayManager::renderPhonePromptScreen(appModeState.uiReadings);
+   sleepAppModeHardware();
    return true;
 }
 
@@ -89,7 +102,7 @@ void runModeMenu()
 
       if (selection.mode == SamplingMenu::ModeRow::AppMode)
       {
-         if (startAppMode())
+         if (startAppMode(menuReadings))
          {
             return;
          }
@@ -97,7 +110,7 @@ void runModeMenu()
          continue;
       }
 
-      runDeviceCycle();
+      runDeviceCycle(true, menuReadings);
    }
 }
 
@@ -116,9 +129,43 @@ void tickAppMode()
       return;
    }
 
+   const bool connected = BleEnvironment::isConnected();
+
+   if (connected && !appModeState.wasConnected)
+   {
+      const unsigned long connectedAtMs = millis();
+      DisplayManager::renderConnectedPromptScreen(appModeState.uiReadings);
+
+      const SensorReadings readings = Sensors::readAll();
+      BleEnvironment::publish(readings);
+      appModeState.uiReadings = readings;
+      appModeState.lastPublishMs = connectedAtMs;
+      appModeState.wasConnected = true;
+      sleepAppModeHardware();
+      delay(20);
+      return;
+   }
+
+   if (!connected && appModeState.wasConnected)
+   {
+      appModeState.wasConnected = false;
+      DisplayManager::renderPhonePromptScreen(appModeState.uiReadings);
+      sleepAppModeHardware();
+      delay(20);
+      return;
+   }
+
+   if (!connected)
+   {
+      sleepAppModeHardware();
+      delay(20);
+      return;
+   }
+
    const unsigned long now = millis();
    if (now - appModeState.lastPublishMs < appModeState.updateIntervalMs)
    {
+      sleepAppModeHardware();
       delay(20);
       return;
    }
@@ -127,7 +174,8 @@ void tickAppMode()
 
    const SensorReadings readings = Sensors::readAll();
    BleEnvironment::publish(readings);
-   Sensors::sleep();
+   appModeState.uiReadings = readings;
+   sleepAppModeHardware();
    delay(20);
 }
 }  // namespace
@@ -146,7 +194,7 @@ void setup()
       return;
    }
 
-   runDeviceCycle();
+   runDeviceCycle(false, SensorReadings());
 }
 
 void loop()

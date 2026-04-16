@@ -16,6 +16,7 @@
 namespace
 {
 constexpr int16_t SENSOR_NO_ERROR = 0;
+constexpr uint32_t BME_REFRESH_INTERVAL_SECONDS = 5UL * 60UL;
 
 SparkFunBMV080SPI bmv080;
 BME690_7semi bme(0x76, BME690_7semi::MODE_I2C);
@@ -30,11 +31,28 @@ bool measurementDevicesReady = false;
 bool batteryGaugeReady = false;
 bool rtcReady = false;
 RTC_DATA_ATTR float lastBatteryPercent = -1.0f;
+RTC_DATA_ATTR bool hasCachedBmeReadings = false;
+RTC_DATA_ATTR float lastBmeTemperature = 0.0f;
+RTC_DATA_ATTR float lastBmeHumidity = 0.0f;
+RTC_DATA_ATTR float lastBmePressure = 0.0f;
+RTC_DATA_ATTR uint32_t lastBmeUnixTime = 0;
+unsigned long lastBmeReadMs = 0;
 
 bool hasCachedBatteryPercent()
 {
    return lastBatteryPercent >= 0.0f &&
           lastBatteryPercent <= 100.0f;
+}
+
+bool hasValidBmeCache()
+{
+   return hasCachedBmeReadings &&
+          !isnan(lastBmeTemperature) &&
+          !isinf(lastBmeTemperature) &&
+          !isnan(lastBmeHumidity) &&
+          !isinf(lastBmeHumidity) &&
+          !isnan(lastBmePressure) &&
+          !isinf(lastBmePressure);
 }
 
 uint16_t clampToUint16(float value)
@@ -101,6 +119,7 @@ void ensurePowerRail()
 
    pinMode(AppConfig::EN_LDO2_PIN, OUTPUT);
    digitalWrite(AppConfig::EN_LDO2_PIN, HIGH);
+   pinMode(AppConfig::DISPLAY_POWER_PIN, OUTPUT);
    delay(200);
    powerRailEnabled = true;
 }
@@ -205,6 +224,59 @@ void ensureRtc()
    rtcReady = true;
 }
 
+bool tryGetCurrentUnixTime(uint32_t& unixTime)
+{
+   ensureRtc();
+
+   if (!rtc.updateTime())
+   {
+      return false;
+   }
+
+   unixTime = rtc.getUNIX();
+   return unixTime != 0;
+}
+
+void applyCachedBmeReadings(SensorReadings& readings)
+{
+   readings.temperature = lastBmeTemperature;
+   readings.humidity = lastBmeHumidity;
+   readings.pressure = lastBmePressure;
+}
+
+void cacheBmeReadings(const SensorReadings& readings, uint32_t unixTime)
+{
+   lastBmeTemperature = readings.temperature;
+   lastBmeHumidity = readings.humidity;
+   lastBmePressure = readings.pressure;
+   lastBmeUnixTime = unixTime;
+   lastBmeReadMs = millis();
+   hasCachedBmeReadings = true;
+}
+
+bool shouldRefreshBme(bool hasCurrentUnixTime, uint32_t currentUnixTime)
+{
+   if (!hasValidBmeCache())
+   {
+      return true;
+   }
+
+   if (hasCurrentUnixTime)
+   {
+      if (lastBmeUnixTime == 0 || currentUnixTime < lastBmeUnixTime)
+      {
+         return true;
+      }
+
+      return (currentUnixTime - lastBmeUnixTime) >=
+             BME_REFRESH_INTERVAL_SECONDS;
+   }
+
+   return lastBmeReadMs == 0 ||
+          (millis() - lastBmeReadMs) >=
+              (BME_REFRESH_INTERVAL_SECONDS * 1000UL);
+}
+
 void readBmv(SensorReadings& readings)
 {
    digitalWrite(AppConfig::BMV_CS_PIN, LOW);
@@ -221,6 +293,16 @@ void readBmv(SensorReadings& readings)
 
 void readBme(SensorReadings& readings)
 {
+   uint32_t currentUnixTime = 0;
+   const bool hasCurrentUnixTime =
+       tryGetCurrentUnixTime(currentUnixTime);
+
+   if (!shouldRefreshBme(hasCurrentUnixTime, currentUnixTime))
+   {
+      applyCachedBmeReadings(readings);
+      return;
+   }
+
    const unsigned long start = millis();
 
    while (!bme.readSensorData())
@@ -237,6 +319,8 @@ void readBme(SensorReadings& readings)
    readings.temperature = bme.getTemperature();
    readings.humidity = bme.getHumidity();
    readings.pressure = bme.getPressure();
+   cacheBmeReadings(readings,
+                    hasCurrentUnixTime ? currentUnixTime : 0);
 }
 
 void readStcc4(SensorReadings& readings)
@@ -312,6 +396,7 @@ void sleep()
    }
 
    digitalWrite(AppConfig::EN_LDO2_PIN, LOW);
+   digitalWrite(AppConfig::DISPLAY_POWER_PIN, HIGH);
    powerRailEnabled = false;
    measurementDevicesReady = false;
    batteryGaugeReady = false;

@@ -47,3 +47,16 @@ void draw(WearAwareDisplay& display, const SensorReadings& readings)
    drawCenteredLine(display, "B1: go back", 123);
 }
 }  // namespace PhonePromptScreen
+
+namespace ConnectedPromptScreen
+{
+void draw(WearAwareDisplay& display, const SensorReadings& readings)
+{
+   display.fillScreen(GxEPD_WHITE);
+   display.setTextWrap(false);
+   ScreenHeader::draw(display, readings.batteryPercent);
+
+   drawCenteredLine(display, "BLE connected", 95);
+   drawCenteredLine(display, "Starting sync...", 123);
+}
+}  // namespace ConnectedPromptScreen

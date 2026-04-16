@@ -200,6 +200,18 @@ void renderAppIntervalMenu(SamplingMenu::AppIntervalRow selectedRow,
    } while (display.nextPage());
 }
 
+void renderWaitingForDataScreen(const SensorReadings& readings)
+{
+   wake();
+   display.setFullWindow();
+
+   display.firstPage();
+   do
+   {
+      WaitingForDataScreen::draw(display, readings);
+   } while (display.nextPage());
+}
+
 void renderPhonePromptScreen(const SensorReadings& readings)
 {
    wake();
@@ -209,6 +221,18 @@ void renderPhonePromptScreen(const SensorReadings& readings)
    do
    {
       PhonePromptScreen::draw(display, readings);
+   } while (display.nextPage());
+}
+
+void renderConnectedPromptScreen(const SensorReadings& readings)
+{
+   wake();
+   display.setFullWindow();
+
+   display.firstPage();
+   do
+   {
+      ConnectedPromptScreen::draw(display, readings);
    } while (display.nextPage());
 }
 }  // namespace DisplayManager

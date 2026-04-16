@@ -20,5 +20,7 @@ void renderDeviceIntervalMenu(
 void renderAppIntervalMenu(SamplingMenu::AppIntervalRow selectedRow,
                            bool usePartialRefresh,
                            const SensorReadings& readings);
+void renderWaitingForDataScreen(const SensorReadings& readings);
 void renderPhonePromptScreen(const SensorReadings& readings);
+void renderConnectedPromptScreen(const SensorReadings& readings);
 }  // namespace DisplayManager

@@ -4,8 +4,9 @@
 
 namespace BleEnvironment
 {
-bool start(const SensorReadings& initialReadings);
+bool start();
 void publish(const SensorReadings& readings);
 void stop();
 bool isRunning();
+bool isConnected();
 }  // namespace BleEnvironment
