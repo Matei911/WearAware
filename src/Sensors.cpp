@@ -8,6 +8,7 @@
 #include <RV-3028-C7.h>
 #include <SensirionI2cStcc4.h>
 #include <math.h>
+#include <stdarg.h>
 #include <stdio.h>
 
 #include "AppConfig.h"
@@ -37,6 +38,53 @@ RTC_DATA_ATTR float lastBmeHumidity = 0.0f;
 RTC_DATA_ATTR float lastBmePressure = 0.0f;
 RTC_DATA_ATTR uint32_t lastBmeUnixTime = 0;
 unsigned long lastBmeReadMs = 0;
+
+#if WEARAWARE_ENABLE_SENSOR_DEBUG_LOGS
+void debugLog(const char* message)
+{
+   Serial.printf("[sensor %lu ms] %s\n",
+                 static_cast<unsigned long>(millis()),
+                 message);
+}
+
+void debugLogf(const char* format, ...)
+{
+   char message[220];
+   va_list args;
+   va_start(args, format);
+   vsnprintf(message, sizeof(message), format, args);
+   va_end(args);
+
+   debugLog(message);
+}
+#else
+void debugLog(const char* /*message*/) {}
+void debugLogf(const char* /*format*/, ...) {}
+#endif
+
+void debugLogDuration(const char* label, unsigned long startedAt)
+{
+   debugLogf("%s done in %lu ms",
+             label,
+             static_cast<unsigned long>(millis() - startedAt));
+}
+
+void debugLogReadings(const SensorReadings& readings)
+{
+   debugLogf("readAll values: PM1=%u PM2.5=%u PM10=%u CO2=%u "
+             "tmp=%.2f hum=%.2f pressure=%.2f battery=%.2f "
+             "timestamp=%s",
+             static_cast<unsigned int>(readings.pm1),
+             static_cast<unsigned int>(readings.pm25),
+             static_cast<unsigned int>(readings.pm10),
+             static_cast<unsigned int>(readings.co2ppm),
+             readings.temperature,
+             readings.humidity,
+             readings.pressure,
+             readings.batteryPercent,
+             readings.timestamp[0] == '\0' ? "(empty)"
+                                            : readings.timestamp);
+}
 
 bool hasCachedBatteryPercent()
 {
@@ -275,6 +323,9 @@ bool shouldRefreshBme(bool hasCurrentUnixTime, uint32_t currentUnixTime)
 
 void readBmv(SensorReadings& readings)
 {
+   const unsigned long startedAt = millis();
+   debugLog("BMV read start");
+
    digitalWrite(AppConfig::BMV_CS_PIN, LOW);
 
    if (bmv080.readSensor())
@@ -282,30 +333,57 @@ void readBmv(SensorReadings& readings)
       readings.pm1 = clampToUint16(bmv080.PM1());
       readings.pm25 = clampToUint16(bmv080.PM25());
       readings.pm10 = clampToUint16(bmv080.PM10());
+      debugLogf("BMV values: PM1=%u PM2.5=%u PM10=%u",
+                static_cast<unsigned int>(readings.pm1),
+                static_cast<unsigned int>(readings.pm25),
+                static_cast<unsigned int>(readings.pm10));
+   }
+   else
+   {
+      debugLog("BMV no new data");
    }
 
    digitalWrite(AppConfig::BMV_CS_PIN, HIGH);
+   debugLogDuration("BMV read", startedAt);
 }
 
 void readBme(SensorReadings& readings)
 {
+   const unsigned long startedAt = millis();
+   debugLog("BME read start");
+
    uint32_t currentUnixTime = 0;
    const bool hasCurrentUnixTime =
        tryGetCurrentUnixTime(currentUnixTime);
+   const bool refreshBme =
+       shouldRefreshBme(hasCurrentUnixTime, currentUnixTime);
 
-   if (!shouldRefreshBme(hasCurrentUnixTime, currentUnixTime))
+   debugLogf("BME clock: rtc=%s unix=%lu refresh=%s",
+             hasCurrentUnixTime ? "ok" : "missing",
+             static_cast<unsigned long>(currentUnixTime),
+             refreshBme ? "yes" : "no");
+
+   if (!refreshBme)
    {
       applyCachedBmeReadings(readings);
+      debugLogf("BME using cache: tmp=%.2f hum=%.2f pressure=%.2f",
+                readings.temperature,
+                readings.humidity,
+                readings.pressure);
+      debugLogDuration("BME read", startedAt);
       return;
    }
 
    const unsigned long start = millis();
+   bool timedOut = false;
 
    while (!bme.readSensorData())
    {
       if (millis() - start > 1000)
       {
          Serial.println("BME timeout");
+         debugLog("BME timeout while waiting for data");
+         timedOut = true;
          break;
       }
 
@@ -317,10 +395,19 @@ void readBme(SensorReadings& readings)
    readings.pressure = bme.getPressure();
    cacheBmeReadings(readings,
                     hasCurrentUnixTime ? currentUnixTime : 0);
+   debugLogf("BME fresh values%s: tmp=%.2f hum=%.2f pressure=%.2f",
+             timedOut ? " after timeout" : "",
+             readings.temperature,
+             readings.humidity,
+             readings.pressure);
+   debugLogDuration("BME read", startedAt);
 }
 
 void readStcc4(SensorReadings& readings)
 {
+   const unsigned long startedAt = millis();
+   debugLog("STCC4 read start");
+
    int16_t co2ppm = 0;
    float temperature = 0.0f;
    float humidity = 0.0f;
@@ -330,6 +417,8 @@ void readStcc4(SensorReadings& readings)
 
    if (error != SENSOR_NO_ERROR)
    {
+      debugLogf("STCC4 first read failed: %d; retrying",
+                static_cast<int>(error));
       delay(150);
       error = stcc4.readMeasurement(co2ppm,
                                     temperature,
@@ -340,26 +429,42 @@ void readStcc4(SensorReadings& readings)
    if (error != SENSOR_NO_ERROR)
    {
       Serial.printf("STCC4 read failed: %d\n", error);
+      debugLogf("STCC4 retry failed: %d", static_cast<int>(error));
       queueStcc4SingleShot();
+      debugLogDuration("STCC4 read", startedAt);
       return;
    }
 
    readings.co2ppm = clampToUint16(co2ppm);
+   debugLogf("STCC4 values: CO2=%u status=%u",
+             static_cast<unsigned int>(readings.co2ppm),
+             static_cast<unsigned int>(status));
    queueStcc4SingleShot();
+   debugLogDuration("STCC4 read", startedAt);
 }
 
 void readBattery(SensorReadings& readings)
 {
+   const unsigned long startedAt = millis();
+   debugLog("battery read start");
+
    readings.batteryPercent = Sensors::readBatteryPercent();
+   debugLogf("battery value: %.2f%%", readings.batteryPercent);
+   debugLogDuration("battery read", startedAt);
 }
 
 void readRtc(SensorReadings& readings)
 {
+   const unsigned long startedAt = millis();
+   debugLog("RTC read start");
+
    ensureRtc();
 
    if (!rtc.updateTime())
    {
       readings.timestamp[0] = '\0';
+      debugLog("RTC update failed");
+      debugLogDuration("RTC read", startedAt);
       return;
    }
 
@@ -367,6 +472,8 @@ void readRtc(SensorReadings& readings)
             sizeof(readings.timestamp),
             "%s",
             rtc.stringTimeStamp());
+   debugLogf("RTC timestamp: %s", readings.timestamp);
+   debugLogDuration("RTC read", startedAt);
 }
 }  // namespace
 
@@ -374,9 +481,13 @@ namespace Sensors
 {
 void wake()
 {
+   const unsigned long startedAt = millis();
+   debugLog("wake start");
+
    ensureMeasurementDevices();
    ensureBatteryGauge();
    ensureRtc();
+   debugLogDuration("wake", startedAt);
 }
 
 void init()
@@ -443,6 +554,9 @@ float batteryPercentForMenu()
 
 SensorReadings readAll()
 {
+   const unsigned long startedAt = millis();
+   debugLog("readAll start");
+
    wake();
 
    SensorReadings readings;
@@ -453,6 +567,8 @@ SensorReadings readAll()
    readBattery(readings);
    readRtc(readings);
 
+   debugLogReadings(readings);
+   debugLogDuration("readAll", startedAt);
    return readings;
 }
 }  // namespace Sensors

@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include <stdarg.h>
+#include <stdio.h>
 
 #include "AppConfig.h"
 #include "BleEnvironment.h"
@@ -25,6 +27,29 @@ struct AppModeState
 AppModeState appModeState;
 
 void sleepAppModeHardware();
+
+#if WEARAWARE_ENABLE_SENSOR_DEBUG_LOGS
+void debugAppLog(const char* message)
+{
+   Serial.printf("[app %lu ms] %s\n",
+                 static_cast<unsigned long>(millis()),
+                 message);
+}
+
+void debugAppLogf(const char* format, ...)
+{
+   char message[180];
+   va_list args;
+   va_start(args, format);
+   vsnprintf(message, sizeof(message), format, args);
+   va_end(args);
+
+   debugAppLog(message);
+}
+#else
+void debugAppLog(const char* /*message*/) {}
+void debugAppLogf(const char* /*format*/, ...) {}
+#endif
 
 bool buttonPressed(int pin)
 {
@@ -80,6 +105,7 @@ bool startAppMode(const SensorReadings& menuReadings)
 {
    if (!BleEnvironment::start())
    {
+      debugAppLog("app mode BLE start failed");
       sleepAppModeHardware();
       return false;
    }
@@ -90,6 +116,11 @@ bool startAppMode(const SensorReadings& menuReadings)
        ModeSettings::selectedAppUpdateIntervalMs();
    appModeState.lastPublishMs = 0;
    appModeState.uiReadings = menuReadings;
+
+   debugAppLogf("app mode started: interval=%lu ms connected=%s",
+                static_cast<unsigned long>(
+                    appModeState.updateIntervalMs),
+                appModeState.wasConnected ? "yes" : "no");
 
    DisplayManager::renderPhonePromptScreen(appModeState.uiReadings);
    appModeState.hardwareSleeping = false;
@@ -134,6 +165,7 @@ void tickAppMode()
 
    if (buttonPressed(AppConfig::BUTTON_PIN_1))
    {
+      debugAppLog("app mode exit requested by B1");
       DisplayManager::renderReturningToMenuScreen(
           appModeState.uiReadings);
       appModeState.hardwareSleeping = false;
@@ -148,12 +180,15 @@ void tickAppMode()
    if (connected && !appModeState.wasConnected)
    {
       const unsigned long connectedAtMs = millis();
+      debugAppLog("BLE connected; first app-mode sensor read starting");
       DisplayManager::renderConnectedPromptScreen(appModeState.uiReadings);
       appModeState.hardwareSleeping = false;
 
       const SensorReadings readings = Sensors::readAll();
       appModeState.hardwareSleeping = false;
+      debugAppLog("first app-mode publish start");
       BleEnvironment::publish(readings);
+      debugAppLog("first app-mode publish done");
       appModeState.uiReadings = readings;
       appModeState.lastPublishMs = connectedAtMs;
       appModeState.wasConnected = true;
@@ -180,7 +215,9 @@ void tickAppMode()
    }
 
    const unsigned long now = millis();
-   if (now - appModeState.lastPublishMs < appModeState.updateIntervalMs)
+   const unsigned long elapsedSincePublish =
+       now - appModeState.lastPublishMs;
+   if (elapsedSincePublish < appModeState.updateIntervalMs)
    {
       sleepAppModeHardware();
       delay(AppConfig::APP_MODE_CONNECTED_IDLE_DELAY_MS);
@@ -188,10 +225,17 @@ void tickAppMode()
    }
 
    appModeState.lastPublishMs = now;
+   debugAppLogf("periodic app-mode read due: elapsed=%lu ms "
+                "interval=%lu ms",
+                static_cast<unsigned long>(elapsedSincePublish),
+                static_cast<unsigned long>(
+                    appModeState.updateIntervalMs));
 
    const SensorReadings readings = Sensors::readAll();
    appModeState.hardwareSleeping = false;
+   debugAppLog("periodic app-mode publish start");
    BleEnvironment::publish(readings);
+   debugAppLog("periodic app-mode publish done");
    appModeState.uiReadings = readings;
    sleepAppModeHardware();
    delay(AppConfig::APP_MODE_SETTLE_DELAY_MS);

@@ -6,6 +6,10 @@
 #define WEARAWARE_ENABLE_BLE_DEBUG_LOGS 0
 #endif
 
+#ifndef WEARAWARE_ENABLE_SENSOR_DEBUG_LOGS
+#define WEARAWARE_ENABLE_SENSOR_DEBUG_LOGS 1
+#endif
+
 namespace AppConfig
 {
 constexpr int EN_LDO2_PIN = 1;
