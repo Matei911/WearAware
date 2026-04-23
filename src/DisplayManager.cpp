@@ -47,10 +47,13 @@ void ensureSpiConfigured()
       return;
    }
 
-   pinMode(AppConfig::BMV_CS_PIN, OUTPUT);
-   digitalWrite(AppConfig::BMV_CS_PIN, HIGH);
    pinMode(AppConfig::EPD_CS, OUTPUT);
    digitalWrite(AppConfig::EPD_CS, HIGH);
+   pinMode(AppConfig::EPD_DC, OUTPUT);
+   digitalWrite(AppConfig::EPD_DC, LOW);
+   pinMode(AppConfig::EPD_RST, OUTPUT);
+   digitalWrite(AppConfig::EPD_RST, HIGH);
+   pinMode(AppConfig::EPD_BUSY, INPUT);
 
    SPI.begin(AppConfig::EPD_SCK,
              AppConfig::EPD_MISO,
@@ -96,7 +99,17 @@ void sleep()
    }
 
    display.hibernate();
+   digitalWrite(AppConfig::EPD_CS, HIGH);
    digitalWrite(AppConfig::DISPLAY_POWER_PIN, HIGH);
+   SPI.end();
+   spiConfigured = false;
+   pinMode(AppConfig::EPD_CS, INPUT);
+   pinMode(AppConfig::EPD_DC, INPUT);
+   pinMode(AppConfig::EPD_RST, INPUT);
+   pinMode(AppConfig::EPD_BUSY, INPUT);
+   pinMode(AppConfig::EPD_SCK, INPUT);
+   pinMode(AppConfig::EPD_MOSI, INPUT);
+   pinMode(AppConfig::EPD_MISO, INPUT);
    displayPowered = false;
    forceNextFullRefresh();
 }
@@ -233,6 +246,18 @@ void renderConnectedPromptScreen(const SensorReadings& readings)
    do
    {
       ConnectedPromptScreen::draw(display, readings);
+   } while (display.nextPage());
+}
+
+void renderReturningToMenuScreen(const SensorReadings& readings)
+{
+   wake();
+   display.setFullWindow();
+
+   display.firstPage();
+   do
+   {
+      ReturningToMenuScreen::draw(display, readings);
    } while (display.nextPage());
 }
 }  // namespace DisplayManager

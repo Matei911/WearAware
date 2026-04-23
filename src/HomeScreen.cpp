@@ -48,13 +48,13 @@ void draw(WearAwareDisplay& display, const SensorReadings& readings)
    display.print("CO2:   " + String(readings.co2ppm) + " ppm");
 
    display.setCursor(7, 124);
-   display.print("Tmp:   " + String(readings.temperature));
+   display.print("Tmp:   " + String(readings.temperature, 1));
 
    display.setCursor(7, 144);
-   display.print("Hu:    " + String(readings.humidity));
+   display.print("Hu:    " + String(readings.humidity, 1));
 
    display.setCursor(7, 164);
-   display.print("Press: " + String(readings.pressure) + " hPa");
+   display.print("Press: " + String(readings.pressure, 1) + " hPa");
 
    display.setCursor(7, 193);
    display.print("Last synced " + formatTimeString(readings));

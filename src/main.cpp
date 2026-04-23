@@ -16,12 +16,15 @@ struct AppModeState
 {
    bool active = false;
    bool wasConnected = false;
+   bool hardwareSleeping = false;
    uint32_t updateIntervalMs = 0;
    unsigned long lastPublishMs = 0;
    SensorReadings uiReadings;
 };
 
 AppModeState appModeState;
+
+void sleepAppModeHardware();
 
 bool buttonPressed(int pin)
 {
@@ -40,14 +43,21 @@ void waitForButtonRelease(int pin)
 
 void stopAppMode()
 {
+   sleepAppModeHardware();
    BleEnvironment::stop();
    appModeState = AppModeState();
 }
 
 void sleepAppModeHardware()
 {
+   if (appModeState.hardwareSleeping)
+   {
+      return;
+   }
+
    DisplayManager::sleep();
    Sensors::sleep();
+   appModeState.hardwareSleeping = true;
 }
 
 void runDeviceCycle(bool showWaitingScreen,
@@ -82,6 +92,7 @@ bool startAppMode(const SensorReadings& menuReadings)
    appModeState.uiReadings = menuReadings;
 
    DisplayManager::renderPhonePromptScreen(appModeState.uiReadings);
+   appModeState.hardwareSleeping = false;
    sleepAppModeHardware();
    return true;
 }
@@ -123,6 +134,9 @@ void tickAppMode()
 
    if (buttonPressed(AppConfig::BUTTON_PIN_1))
    {
+      DisplayManager::renderReturningToMenuScreen(
+          appModeState.uiReadings);
+      appModeState.hardwareSleeping = false;
       waitForButtonRelease(AppConfig::BUTTON_PIN_1);
       stopAppMode();
       runModeMenu();
@@ -135,14 +149,16 @@ void tickAppMode()
    {
       const unsigned long connectedAtMs = millis();
       DisplayManager::renderConnectedPromptScreen(appModeState.uiReadings);
+      appModeState.hardwareSleeping = false;
 
       const SensorReadings readings = Sensors::readAll();
+      appModeState.hardwareSleeping = false;
       BleEnvironment::publish(readings);
       appModeState.uiReadings = readings;
       appModeState.lastPublishMs = connectedAtMs;
       appModeState.wasConnected = true;
       sleepAppModeHardware();
-      delay(20);
+      delay(AppConfig::APP_MODE_SETTLE_DELAY_MS);
       return;
    }
 
@@ -150,15 +166,16 @@ void tickAppMode()
    {
       appModeState.wasConnected = false;
       DisplayManager::renderPhonePromptScreen(appModeState.uiReadings);
+      appModeState.hardwareSleeping = false;
       sleepAppModeHardware();
-      delay(20);
+      delay(AppConfig::APP_MODE_SETTLE_DELAY_MS);
       return;
    }
 
    if (!connected)
    {
       sleepAppModeHardware();
-      delay(20);
+      delay(AppConfig::APP_MODE_ADVERTISING_IDLE_DELAY_MS);
       return;
    }
 
@@ -166,17 +183,18 @@ void tickAppMode()
    if (now - appModeState.lastPublishMs < appModeState.updateIntervalMs)
    {
       sleepAppModeHardware();
-      delay(20);
+      delay(AppConfig::APP_MODE_CONNECTED_IDLE_DELAY_MS);
       return;
    }
 
    appModeState.lastPublishMs = now;
 
    const SensorReadings readings = Sensors::readAll();
+   appModeState.hardwareSleeping = false;
    BleEnvironment::publish(readings);
    appModeState.uiReadings = readings;
    sleepAppModeHardware();
-   delay(20);
+   delay(AppConfig::APP_MODE_SETTLE_DELAY_MS);
 }
 }  // namespace
 

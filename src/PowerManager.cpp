@@ -9,6 +9,11 @@ namespace PowerManager
 {
 void init()
 {
+   pinMode(AppConfig::EN_LDO2_PIN, OUTPUT);
+   digitalWrite(AppConfig::EN_LDO2_PIN, LOW);
+   pinMode(AppConfig::DISPLAY_POWER_PIN, OUTPUT);
+   digitalWrite(AppConfig::DISPLAY_POWER_PIN, HIGH);
+
    pinMode(AppConfig::BUTTON_PIN_1, INPUT_PULLUP);
    pinMode(AppConfig::BUTTON_PIN_2, INPUT_PULLUP);
    pinMode(AppConfig::BUTTON_PIN_3, INPUT_PULLUP);

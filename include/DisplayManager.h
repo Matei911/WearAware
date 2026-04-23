@@ -23,4 +23,5 @@ void renderAppIntervalMenu(SamplingMenu::AppIntervalRow selectedRow,
 void renderWaitingForDataScreen(const SensorReadings& readings);
 void renderPhonePromptScreen(const SensorReadings& readings);
 void renderConnectedPromptScreen(const SensorReadings& readings);
+void renderReturningToMenuScreen(const SensorReadings& readings);
 }  // namespace DisplayManager

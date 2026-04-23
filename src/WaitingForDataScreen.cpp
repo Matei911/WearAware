@@ -60,3 +60,16 @@ void draw(WearAwareDisplay& display, const SensorReadings& readings)
    drawCenteredLine(display, "Starting sync...", 123);
 }
 }  // namespace ConnectedPromptScreen
+
+namespace ReturningToMenuScreen
+{
+void draw(WearAwareDisplay& display, const SensorReadings& readings)
+{
+   display.fillScreen(GxEPD_WHITE);
+   display.setTextWrap(false);
+   ScreenHeader::draw(display, readings.batteryPercent);
+
+   drawCenteredLine(display, "Returning to", 95);
+   drawCenteredLine(display, "menu...", 123);
+}
+}  // namespace ReturningToMenuScreen

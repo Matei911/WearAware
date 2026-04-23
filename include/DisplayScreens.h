@@ -42,3 +42,8 @@ namespace ConnectedPromptScreen
 {
 void draw(WearAwareDisplay& display, const SensorReadings& readings);
 }  // namespace ConnectedPromptScreen
+
+namespace ReturningToMenuScreen
+{
+void draw(WearAwareDisplay& display, const SensorReadings& readings);
+}  // namespace ReturningToMenuScreen

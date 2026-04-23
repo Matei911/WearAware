@@ -6,6 +6,8 @@
 #include <NimBLEDevice.h>
 #include <math.h>
 
+#include "AppConfig.h"
+
 namespace
 {
 constexpr char DEVICE_NAME[] = "WearAware";
@@ -41,10 +43,15 @@ bool runtimeActive = false;
 
 class ServerCallbacks : public NimBLEServerCallbacks
 {
-   void onConnect(NimBLEServer* /*server*/,
-                  NimBLEConnInfo& /*connInfo*/) override
+   void onConnect(NimBLEServer* server,
+                  NimBLEConnInfo& connInfo) override
    {
       deviceConnected = true;
+      server->updateConnParams(connInfo.getConnHandle(),
+                               AppConfig::BLE_CONN_INTERVAL_MIN_UNITS,
+                               AppConfig::BLE_CONN_INTERVAL_MAX_UNITS,
+                               AppConfig::BLE_CONN_LATENCY,
+                               AppConfig::BLE_CONN_TIMEOUT_UNITS);
       Serial.println("BLE client connected");
    }
 
@@ -96,6 +103,7 @@ void setInt32Value(NimBLECharacteristic* characteristic, int32_t value)
 
 void logReadings(const SensorReadings& readings)
 {
+#if WEARAWARE_ENABLE_BLE_DEBUG_LOGS
    Serial.println("BLE environment update:");
    Serial.printf("Temp: %ld\n",
                  static_cast<long>(roundedInt32(readings.temperature)));
@@ -109,6 +117,9 @@ void logReadings(const SensorReadings& readings)
    Serial.printf("PM10: %u\n", readings.pm10);
    Serial.printf("Batt: %ld\n",
                  static_cast<long>(roundedInt32(readings.batteryPercent)));
+#else
+   (void)readings;
+#endif
 }
 
 bool characteristicsReady()
@@ -185,7 +196,7 @@ bool start()
    }
 
    NimBLEDevice::setDeviceName(DEVICE_NAME);
-   NimBLEDevice::setPower(ESP_PWR_LVL_P9);
+   NimBLEDevice::setPower(AppConfig::BLE_TX_POWER_DBM);
    server = NimBLEDevice::createServer();
    server->setCallbacks(&serverCallbacks);
 
@@ -205,6 +216,11 @@ bool start()
    NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
    advertising->clearData();
    advertising->enableScanResponse(true);
+   advertising->setMinInterval(AppConfig::BLE_ADV_INTERVAL_MIN_UNITS);
+   advertising->setMaxInterval(AppConfig::BLE_ADV_INTERVAL_MAX_UNITS);
+   advertising->setPreferredParams(
+       AppConfig::BLE_CONN_INTERVAL_MIN_UNITS,
+       AppConfig::BLE_CONN_INTERVAL_MAX_UNITS);
 
    NimBLEAdvertisementData advertisementData;
    advertisementData.setFlags(BLE_HS_ADV_F_DISC_GEN |

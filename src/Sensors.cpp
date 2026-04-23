@@ -119,7 +119,6 @@ void ensurePowerRail()
 
    pinMode(AppConfig::EN_LDO2_PIN, OUTPUT);
    digitalWrite(AppConfig::EN_LDO2_PIN, HIGH);
-   pinMode(AppConfig::DISPLAY_POWER_PIN, OUTPUT);
    delay(200);
    powerRailEnabled = true;
 }
@@ -173,9 +172,6 @@ void ensureMeasurementDevices()
 
    pinMode(AppConfig::BMV_CS_PIN, OUTPUT);
    digitalWrite(AppConfig::BMV_CS_PIN, HIGH);
-
-   pinMode(AppConfig::EPD_CS, OUTPUT);
-   digitalWrite(AppConfig::EPD_CS, HIGH);
 
    if (!bme.begin(Wire))
    {
@@ -390,14 +386,36 @@ void init()
 
 void sleep()
 {
-   if (!powerRailEnabled)
+   if (measurementDevicesReady)
    {
-      return;
+      pinMode(AppConfig::BMV_CS_PIN, OUTPUT);
+      digitalWrite(AppConfig::BMV_CS_PIN, HIGH);
    }
 
-   digitalWrite(AppConfig::EN_LDO2_PIN, LOW);
-   digitalWrite(AppConfig::DISPLAY_POWER_PIN, HIGH);
-   powerRailEnabled = false;
+   if (wireInitialized)
+   {
+      Wire.end();
+      wireInitialized = false;
+   }
+
+   if (wire1Initialized)
+   {
+      Wire1.end();
+      wire1Initialized = false;
+   }
+
+   pinMode(AppConfig::SDA_PIN0, INPUT);
+   pinMode(AppConfig::SCL_PIN0, INPUT);
+   pinMode(AppConfig::SDA_PIN1, INPUT);
+   pinMode(AppConfig::SCL_PIN1, INPUT);
+   pinMode(AppConfig::BMV_CS_PIN, INPUT);
+
+   if (powerRailEnabled)
+   {
+      digitalWrite(AppConfig::EN_LDO2_PIN, LOW);
+      powerRailEnabled = false;
+   }
+
    measurementDevicesReady = false;
    batteryGaugeReady = false;
    rtcReady = false;
